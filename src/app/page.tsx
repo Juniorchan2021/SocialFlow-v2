@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import ScoreRing from '@/components/ScoreRing';
 import { cn, statusBadge, scoreColor } from '@/lib/utils';
@@ -47,15 +47,68 @@ export default function Home() {
     );
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const newImages = files.slice(0, 9 - images.length).map(file => ({
+  const [isDragging, setIsDragging] = useState(false);
+  const [pasteFlash, setPasteFlash] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  const addImageFiles = useCallback((files: File[]) => {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    const newImages = imageFiles.slice(0, 9 - images.length).map(file => ({
       file,
       preview: URL.createObjectURL(file),
     }));
     setImages(prev => [...prev, ...newImages].slice(0, 9));
+  }, [images.length]);
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) files.push(file);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        addImageFiles(files);
+        setPasteFlash(true);
+        setTimeout(() => setPasteFlash(false), 800);
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [addImageFiles]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addImageFiles(Array.from(e.target.files || []));
     e.target.value = '';
   };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dropRef.current && !dropRef.current.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    addImageFiles(files);
+  }, [addImageFiles]);
 
   const removeImage = (idx: number) => {
     setImages(prev => {
@@ -262,43 +315,77 @@ export default function Home() {
 
           {/* Image Upload */}
           <div className="mb-5">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 block">
-              配图 / Images（可选，最多9张）
-            </label>
-            <div className="flex flex-wrap gap-3">
-              {images.map((img, idx) => (
-                <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-700 group">
-                  <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                  {img.analyzing && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                      <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  )}
-                  {img.analysis && (
-                    <div className="absolute top-1 right-1">
-                      <span className={cn(
-                        'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                        img.analysis.design.designScore >= 70 ? 'bg-green-500/80 text-white' :
-                        img.analysis.design.designScore >= 50 ? 'bg-amber-500/80 text-white' : 'bg-red-500/80 text-white'
-                      )}>
-                        {img.analysis.design.designScore}
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => removeImage(idx)}
-                    className="absolute top-1 left-1 w-5 h-5 bg-black/70 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-              {images.length < 9 && (
-                <label className="w-20 h-20 rounded-lg border-2 border-dashed border-slate-700 flex items-center justify-center cursor-pointer hover:border-indigo-500 transition text-slate-500 hover:text-indigo-400">
-                  <span className="text-2xl">+</span>
-                  <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
-                </label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                配图 / Images（可选，最多9张）
+              </label>
+              <span className={cn(
+                'text-[10px] px-2 py-0.5 rounded-full transition-all duration-300',
+                pasteFlash
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-slate-800 text-slate-500'
+              )}>
+                {pasteFlash ? '✓ 已粘贴' : '⌘V 可直接粘贴'}
+              </span>
+            </div>
+            <div
+              ref={dropRef}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={cn(
+                'relative rounded-xl border-2 border-dashed p-3 transition-all duration-200',
+                isDragging
+                  ? 'border-indigo-500 bg-indigo-500/10'
+                  : 'border-slate-700/50 bg-transparent'
               )}
+            >
+              {isDragging && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-indigo-500/10 backdrop-blur-sm">
+                  <div className="text-sm font-medium text-indigo-400">松开即可添加图片</div>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-3">
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-700 group">
+                    <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                    {img.analyzing && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                    {img.analysis && (
+                      <div className="absolute top-1 right-1">
+                        <span className={cn(
+                          'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                          img.analysis.design.designScore >= 70 ? 'bg-green-500/80 text-white' :
+                          img.analysis.design.designScore >= 50 ? 'bg-amber-500/80 text-white' : 'bg-red-500/80 text-white'
+                        )}>
+                          {img.analysis.design.designScore}
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => removeImage(idx)}
+                      className="absolute top-1 left-1 w-5 h-5 bg-black/70 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                {images.length < 9 && (
+                  <label className="w-20 h-20 rounded-lg border-2 border-dashed border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 transition text-slate-500 hover:text-indigo-400 gap-0.5">
+                    <span className="text-2xl leading-none">+</span>
+                    <span className="text-[9px]">选取</span>
+                    <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
+                  </label>
+                )}
+                {images.length === 0 && (
+                  <div className="flex-1 flex items-center justify-center py-2 text-xs text-slate-600 select-none">
+                    直接粘贴截图 · 拖拽图片到此处 · 或点击 + 选取文件
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
