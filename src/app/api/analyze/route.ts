@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeContent, type ScoreResult } from '@/lib/scoring';
 import { aiAnalyzeContent } from '@/lib/ai-client';
+import { simulateAlgorithm, type AlgoSimResult } from '@/lib/algorithm-sim';
+import { predictViral, type ViralPrediction } from '@/lib/viral-predictor';
+import { addHistory } from '@/lib/db';
 import type { Platform } from '@/lib/rules';
 
 export async function POST(req: NextRequest) {
@@ -20,20 +23,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '内容超过长度限制（最多5000字符）' }, { status: 400 });
     }
 
-    const results: (ScoreResult & { aiAnalysis?: unknown })[] = platforms.map(p =>
-      analyzeContent(title, content, p, twitterLang)
-    );
+    const results: (ScoreResult & {
+      aiAnalysis?: unknown;
+      algoSim?: AlgoSimResult;
+      viralPrediction?: ViralPrediction;
+    })[] = platforms.map(p => {
+      const result = analyzeContent(title, content, p, twitterLang);
+      const algoSim = simulateAlgorithm(p, title, content, result.structure, result.language as 'zh' | 'en');
+      const viralPrediction = predictViral(p, title, content, result.structure, result.contentType, result.language as 'zh' | 'en');
+      return { ...result, algoSim, viralPrediction };
+    });
 
-    // AI deep analysis in parallel
     await Promise.all(results.map(async (item) => {
-      const violationSummary = item.violations.length > 0
-        ? item.violations.map(v => `"${v.keyword}"(${v.level})`).join(', ')
-        : 'none';
-      item.aiAnalysis = await aiAnalyzeContent(
-        title, content, item.platform, item.platformName,
-        item.language as 'zh' | 'en', violationSummary, item.contentType,
-      );
+      try {
+        const violationSummary = item.violations.length > 0
+          ? item.violations.map(v => `"${v.keyword}"(${v.level})`).join(', ')
+          : 'none';
+        item.aiAnalysis = await aiAnalyzeContent(
+          title, content, item.platform, item.platformName,
+          item.language as 'zh' | 'en', violationSummary, item.contentType,
+        );
+      } catch { item.aiAnalysis = null; }
     }));
+
+    // Save to history
+    try {
+      const primary = results[0];
+      addHistory({
+        platforms,
+        title: title || '',
+        contentPreview: content.slice(0, 100),
+        overallScore: primary.overallScore,
+        status: primary.status,
+      });
+    } catch { /* history save is non-critical */ }
 
     return NextResponse.json({
       success: true,

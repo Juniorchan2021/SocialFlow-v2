@@ -38,6 +38,12 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Platform>('xhs');
   const [rewriting, setRewriting] = useState<string | null>(null);
   const [rewriteResult, setRewriteResult] = useState<any>(null);
+  const [abMode, setAbMode] = useState(false);
+  const [altTitles, setAltTitles] = useState(['', '']);
+  const [abResults, setAbResults] = useState<any>(null);
+  const [abLoading, setAbLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   const togglePlatform = (p: Platform) => {
     setSelectedPlatforms(prev =>
@@ -60,6 +66,11 @@ export default function Home() {
     }));
     setImages(prev => [...prev, ...newImages].slice(0, 9));
   }, [images.length]);
+
+  useEffect(() => {
+    return () => { images.forEach(img => URL.revokeObjectURL(img.preview)); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
@@ -125,6 +136,7 @@ export default function Home() {
     setResults(null);
     setRewriteResult(null);
 
+    let freshResults: any[] | null = null;
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
@@ -133,6 +145,7 @@ export default function Home() {
       });
       const json = await res.json();
       if (json.success) {
+        freshResults = json.data;
         setResults(json.data);
         setActiveTab(json.data[0]?.platform || selectedPlatforms[0]);
       }
@@ -140,37 +153,32 @@ export default function Home() {
       console.error('Analysis failed:', err);
     }
 
-    // Analyze images in parallel
-    if (images.length > 0 && results) {
+    if (images.length > 0 && freshResults) {
       const primaryPlatform = selectedPlatforms[0];
       const lang = primaryPlatform === 'xhs' ? 'zh' : primaryPlatform === 'twitter' ? twitterLang : 'en';
+      const currentImages = images;
 
-      for (let i = 0; i < images.length; i++) {
+      await Promise.all(currentImages.map(async (img, i) => {
         setImages(prev => {
           const copy = [...prev];
           if (copy[i]) copy[i] = { ...copy[i], analyzing: true };
           return copy;
         });
-
         try {
           const reader = new FileReader();
-          const base64 = await new Promise<string>((resolve) => {
+          const base64 = await new Promise<string>((resolve, reject) => {
             reader.onload = () => resolve((reader.result as string).split(',')[1]);
-            reader.readAsDataURL(images[i].file);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(img.file);
           });
-
-          const mediaType = images[i].file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+          const mediaType = img.file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
           const visionRes = await fetch('/api/vision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              imageBase64: base64,
-              mediaType,
-              platform: primaryPlatform,
+              imageBase64: base64, mediaType, platform: primaryPlatform,
               platformName: PLATFORMS.find(p => p.id === primaryPlatform)?.name,
-              contentType: 'general',
-              title,
-              lang,
+              contentType: 'general', title, lang,
             }),
           });
           const visionJson = await visionRes.json();
@@ -189,7 +197,7 @@ export default function Home() {
             return copy;
           });
         }
-      }
+      }));
     }
 
     setAnalyzing(false);
@@ -221,13 +229,47 @@ export default function Home() {
     setRewriting(null);
   };
 
+  const handleABTest = useCallback(async () => {
+    const titles = [title, ...altTitles].filter(t => t.trim());
+    if (titles.length < 2 || !content.trim()) return;
+    setAbLoading(true);
+    try {
+      const res = await fetch('/api/ab-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titles, content, platform: selectedPlatforms[0], twitterLang }),
+      });
+      const json = await res.json();
+      if (json.success) setAbResults(json);
+    } catch (err) { console.error('A/B test failed:', err); }
+    setAbLoading(false);
+  }, [title, altTitles, content, selectedPlatforms, twitterLang]);
+
+  const handleShareReport = useCallback(async () => {
+    if (!results) return;
+    setSharing(true);
+    try {
+      const res = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platforms: selectedPlatforms, title, content, twitterLang, results }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShareUrl(json.reportUrl);
+        try { await navigator.clipboard.writeText(json.reportUrl); } catch {}
+      }
+    } catch (err) { console.error('Share failed:', err); }
+    setSharing(false);
+  }, [results, selectedPlatforms, title, content, twitterLang]);
+
   const activeResult = results?.find((r: any) => r.platform === activeTab);
   const isZh = activeResult?.language === 'zh';
 
   return (
     <div className="min-h-screen bg-[#09090B] text-slate-100">
       {/* Header */}
-      <header className="text-center pt-16 pb-10 px-4">
+      <header className="text-center pt-10 pb-8 px-4">
         <div className="text-xs font-bold tracking-[0.15em] uppercase text-indigo-400 mb-3">SocialFlow v2.0</div>
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">
           社媒内容 & 视觉智能检测
@@ -293,6 +335,32 @@ export default function Home() {
               className="w-full bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition"
             />
           </div>
+
+          {/* A/B Title Toggle + Inputs */}
+          <div className="flex items-center gap-2 mb-2">
+            <button onClick={() => { setAbMode(!abMode); setAbResults(null); }}
+              className={cn('text-[10px] px-2.5 py-1 rounded-full font-medium transition border',
+                abMode ? 'bg-purple-600/20 border-purple-500/30 text-purple-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300')}>
+              {abMode ? '✓ A/B 标题对比' : '+ A/B 标题对比'}
+            </button>
+            {abMode && <span className="text-[10px] text-slate-500">输入备选标题，对比哪个更好</span>}
+          </div>
+          {abMode && (
+            <div className="space-y-2 mb-4">
+              {altTitles.map((t, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="text-xs text-slate-500 w-6 shrink-0 pt-3">#{i + 2}</span>
+                  <input type="text" value={t} onChange={e => { const n = [...altTitles]; n[i] = e.target.value; setAltTitles(n); }}
+                    placeholder={`备选标题 ${i + 2}`}
+                    className="flex-1 bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-sm placeholder-slate-500 focus:outline-none focus:border-purple-500 transition" />
+                </div>
+              ))}
+              <button onClick={handleABTest} disabled={abLoading || !content.trim() || altTitles.every(t => !t.trim())}
+                className="w-full py-2 rounded-lg text-xs font-medium bg-purple-600/20 text-purple-400 border border-purple-500/20 hover:bg-purple-600/30 transition disabled:opacity-40">
+                {abLoading ? '分析中...' : '🔄 对比标题'}
+              </button>
+            </div>
+          )}
 
           {/* Content */}
           <div className="mb-4">
@@ -534,6 +602,133 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Algorithm Simulation */}
+                {activeResult.algoSim && (
+                  <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                        🧮 {activeResult.algoSim.modelName}
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">{activeResult.algoSim.totalScore}/{activeResult.algoSim.maxTotal}</span>
+                        <span className={cn('text-sm font-bold px-2 py-0.5 rounded',
+                          activeResult.algoSim.grade === 'S' ? 'bg-green-500/15 text-green-400' :
+                          activeResult.algoSim.grade === 'A' ? 'bg-blue-500/15 text-blue-400' :
+                          activeResult.algoSim.grade === 'B' ? 'bg-amber-500/15 text-amber-400' :
+                          'bg-red-500/15 text-red-400')}>
+                          {activeResult.algoSim.grade}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-xs text-indigo-300 bg-indigo-500/10 rounded-lg px-3 py-2 mb-3">{activeResult.algoSim.prediction}</div>
+                    <div className="space-y-2">
+                      {activeResult.algoSim.signals.map((sig: any, i: number) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-slate-300 truncate">{sig.name}</span>
+                              <span className="text-[10px] text-slate-500 shrink-0">{sig.score}/{sig.maxScore}</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${(sig.score / sig.maxScore) * 100}%`, backgroundColor: sig.score >= sig.maxScore * 0.7 ? '#22C55E' : sig.score >= sig.maxScore * 0.4 ? '#F59E0B' : '#EF4444' }} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Viral Prediction */}
+                {activeResult.viralPrediction && (
+                  <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-6">
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">
+                      🔥 {isZh ? '爆款预测' : 'Viral Prediction'}
+                    </h3>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className={cn('text-3xl font-bold',
+                        activeResult.viralPrediction.probability === 'high' ? 'text-green-400' :
+                        activeResult.viralPrediction.probability === 'medium' ? 'text-amber-400' : 'text-slate-500')}>
+                        {activeResult.viralPrediction.percentage}%
+                      </div>
+                      <div>
+                        <span className={cn('text-sm font-bold px-3 py-1 rounded-full',
+                          activeResult.viralPrediction.probability === 'high' ? 'bg-green-500/15 text-green-400' :
+                          activeResult.viralPrediction.probability === 'medium' ? 'bg-amber-500/15 text-amber-400' :
+                          'bg-slate-500/15 text-slate-400')}>
+                          {activeResult.viralPrediction.probability === 'high' ? (isZh ? '高概率爆款' : 'High Viral') :
+                           activeResult.viralPrediction.probability === 'medium' ? (isZh ? '有潜力' : 'Potential') :
+                           (isZh ? '需提升' : 'Low')}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-2 mb-4">
+                      {activeResult.viralPrediction.factors.map((f: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">{f.name}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${f.score}%`, backgroundColor: f.score >= 70 ? '#22C55E' : f.score >= 45 ? '#F59E0B' : '#EF4444' }} />
+                            </div>
+                            <span className="text-slate-500 w-8 text-right">{f.score}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {activeResult.viralPrediction.boostTips.length > 0 && (
+                      <div className="space-y-1.5">
+                        {activeResult.viralPrediction.boostTips.map((tip: string, i: number) => (
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                            <span className="text-amber-400 mt-0.5">⚡</span>
+                            <span>{tip}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* A/B Title Results */}
+                {abResults && (
+                  <div className="bg-slate-900/60 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">
+                      🔄 {isZh ? 'A/B 标题对比结果' : 'A/B Title Comparison'}
+                    </h3>
+                    <div className="space-y-3">
+                      {abResults.rankings.map((r: any, i: number) => (
+                        <div key={i} className={cn('p-3 rounded-xl border', r.rank === 1 ? 'bg-green-500/5 border-green-500/20' : 'bg-slate-800/40 border-slate-700/50')}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={cn('text-xs font-bold px-2 py-0.5 rounded', r.rank === 1 ? 'bg-green-500/15 text-green-400' : 'bg-slate-700 text-slate-400')}>
+                              #{r.rank}
+                            </span>
+                            <span className="text-sm text-slate-200 flex-1 truncate">{r.title}</span>
+                            <span className="text-sm font-bold" style={{ color: scoreColor(r.overallScore) }}>{r.overallScore}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-[10px]">
+                            <div className="text-center"><div className="text-slate-500">{isZh ? '钩子' : 'Hook'}</div><div className="font-bold text-slate-300">{r.hookStrength}</div></div>
+                            <div className="text-center"><div className="text-slate-500">{isZh ? '好奇心' : 'Curiosity'}</div><div className="font-bold text-slate-300">{r.curiosityGap}</div></div>
+                            <div className="text-center"><div className="text-slate-500">{isZh ? '情绪' : 'Emotion'}</div><div className="font-bold text-slate-300">{r.emotionalPull}</div></div>
+                          </div>
+                        </div>
+                      ))}
+                      {abResults.aiSuggestion && (
+                        <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-400">✦ AI</span>
+                            <span className="text-sm text-indigo-300 flex-1">{abResults.aiSuggestion.title}</span>
+                            <span className="text-sm font-bold" style={{ color: scoreColor(abResults.aiSuggestion.overallScore) }}>{abResults.aiSuggestion.overallScore}</span>
+                          </div>
+                          <button onClick={() => { setTitle(abResults.aiSuggestion.title); }}
+                            className="text-[10px] px-3 py-1 rounded-full bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600/30 transition">
+                            {isZh ? '采用此标题' : 'Use this title'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Image Analysis */}
                 {images.length > 0 && images.some(img => img.analysis) && (
                   <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-6">
@@ -716,6 +911,23 @@ export default function Home() {
                       >
                         📋 {isZh ? '复制改写结果' : 'Copy Result'}
                       </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Share Report */}
+                <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-2xl border border-indigo-500/20 p-6 text-center">
+                  <p className="text-sm text-slate-300 mb-3">{isZh ? '生成可分享的检测报告' : 'Generate a shareable report'}</p>
+                  <button onClick={handleShareReport} disabled={sharing}
+                    className="px-8 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 transition shadow-lg shadow-indigo-500/20 disabled:opacity-40 text-sm">
+                    {sharing ? '生成中...' : '📤 生成分享报告'}
+                  </button>
+                  {shareUrl && (
+                    <div className="mt-3 flex items-center justify-center gap-2">
+                      <span className="text-xs text-green-400">✓ {isZh ? '链接已复制' : 'Link copied'}</span>
+                      <a href={shareUrl} target="_blank" rel="noopener" className="text-xs text-indigo-400 underline hover:text-indigo-300">
+                        {isZh ? '打开报告' : 'Open report'}
+                      </a>
                     </div>
                   )}
                 </div>
