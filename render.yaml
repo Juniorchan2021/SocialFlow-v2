@@ -1,7 +1,8 @@
 services:
   - type: web
-    name: socialflow
+    name: socialflow-v2
     runtime: node
+    repo: https://github.com/Juniorchan2021/SocialFlow-v2
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
@@ -11,4 +12,3 @@ services:
         sync: false
     plan: free
     branch: main
-    healthCheckPath: /api/analyze
