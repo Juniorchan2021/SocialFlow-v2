@@ -152,11 +152,15 @@ export default function Home() {
   const handleShareReport = useCallback(async () => {
     if (!results) return; setSharing(true);
     try {
-      const imageThumbnails = await Promise.all(images.map(img => resizeToThumbnail(img.file)));
-      const validThumbnails = imageThumbnails.filter(Boolean);
+      const imageData = await Promise.all(images.map(async (img) => {
+        const src = await resizeToThumbnail(img.file);
+        if (!src) return null;
+        return { src, analysis: img.analysis || undefined };
+      }));
+      const validImageData = imageData.filter(Boolean);
       const res = await fetch('/api/report', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ existingId: savedReportId, platforms: selectedPlatforms, title, content, twitterLang, results, imageThumbnails: validThumbnails }),
+        body: JSON.stringify({ existingId: savedReportId, platforms: selectedPlatforms, title, content, twitterLang, results, imageData: validImageData }),
       });
       const json = await res.json();
       if (json.success) { setShareUrl(json.reportUrl); setSavedReportId(json.reportId); try { await navigator.clipboard.writeText(json.reportUrl); } catch {} }

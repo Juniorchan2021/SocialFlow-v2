@@ -5,14 +5,14 @@ import { saveReport, getReport, incrementShareCount } from '@/lib/db';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { platforms, title, content, twitterLang, results, imageThumbnails, existingId } = body;
+    const { platforms, title, content, twitterLang, results, imageData, existingId } = body;
 
     if (!results || !platforms) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
     }
 
     const id = existingId || nanoid(10);
-    saveReport({ id, platforms, title: title || '', content: content || '', twitterLang, results, images: imageThumbnails || [] });
+    saveReport({ id, platforms, title: title || '', content: content || '', twitterLang, results, images: imageData || [] });
 
     const host = req.headers.get('host') || 'socialflow-v2.onrender.com';
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `https://${host}`;

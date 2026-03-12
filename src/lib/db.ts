@@ -41,6 +41,14 @@ function getDb(): Database.Database {
 
 // --- Reports ---
 
+export interface ReportImage {
+  src: string;
+  analysis?: {
+    compliance: { overallRisk: string; issues: { type: string; severity: string; description: string; action: string }[]; safeToPublish: boolean };
+    design: { designScore: number; scrollStopPower: number; feedback: string; topActions: string[]; styleReferences: { name: string; description: string }[] };
+  };
+}
+
 export function saveReport(data: {
   id: string;
   platforms: string[];
@@ -48,7 +56,7 @@ export function saveReport(data: {
   content: string;
   twitterLang?: string;
   results: unknown;
-  images?: string[];
+  images?: ReportImage[];
 }): void {
   const db = getDb();
   db.prepare(`
@@ -68,15 +76,20 @@ export function getReport(id: string): {
   content: string;
   twitterLang: string | null;
   results: unknown;
-  images: string[];
+  images: ReportImage[];
   createdAt: string;
   shareCount: number;
 } | null {
   const db = getDb();
   const row = db.prepare('SELECT * FROM reports WHERE id = ?').get(id) as Record<string, unknown> | undefined;
   if (!row) return null;
-  let images: string[] = [];
-  try { images = JSON.parse((row.images as string) || '[]'); } catch { images = []; }
+  let images: ReportImage[] = [];
+  try {
+    const raw = JSON.parse((row.images as string) || '[]');
+    images = Array.isArray(raw) ? raw.map((item: any) =>
+      typeof item === 'string' ? { src: item } : item
+    ) : [];
+  } catch { images = []; }
   return {
     id: row.id as string,
     platforms: JSON.parse(row.platforms as string),

@@ -6,6 +6,14 @@ import { useLang } from '@/lib/lang-context';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 
+function formatUTC8(utcStr: string): string {
+  const d = new Date(utcStr + (utcStr.endsWith('Z') ? '' : 'Z'));
+  const offset = d.getTime() + 8 * 3600 * 1000;
+  const utc8 = new Date(offset);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${utc8.getUTCFullYear()}/${pad(utc8.getUTCMonth() + 1)}/${pad(utc8.getUTCDate())} ${pad(utc8.getUTCHours())}:${pad(utc8.getUTCMinutes())}`;
+}
+
 interface HistoryItem { id: number; reportId: string | null; platforms: string[]; title: string; contentPreview: string; overallScore: number; status: string; createdAt: string; }
 
 const ICONS: Record<string, string> = { xhs: '📕', twitter: '𝕏', facebook: 'f', instagram: '📸', youtube: '▶' };
@@ -45,7 +53,7 @@ export default function HistoryPage() {
                       <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-md', STATUS_CLS[item.status] || '')}>{statusLabel(item.status)}</span>
                     </div>
                     <div className="text-sm text-zinc-300 truncate">{item.title || item.contentPreview}</div>
-                    <div className="text-[10px] text-zinc-600 mt-0.5 font-mono">{new Date(item.createdAt).toLocaleString('zh-CN')}</div>
+                    <div className="text-[10px] text-zinc-600 mt-0.5 font-mono">{formatUTC8(item.createdAt)}</div>
                   </div>
                   {item.reportId && <ExternalLink size={14} className="text-zinc-600 shrink-0" />}
                 </>

@@ -2,12 +2,20 @@
 
 import { useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { Share2, Download, Sparkles, Shield, TrendingUp, Zap, Flame } from 'lucide-react';
+import { Share2, Download, Sparkles, Shield, TrendingUp, Zap, Flame, ImageIcon, Eye } from 'lucide-react';
 import ScoreRing from '@/components/ScoreRing';
 import { cn, statusBadge, scoreColor } from '@/lib/utils';
 import { useLang } from '@/lib/lang-context';
 
 const RadarChart = dynamic(() => import('@/components/RadarChart'), { ssr: false });
+
+interface ReportImage {
+  src: string;
+  analysis?: {
+    compliance: { overallRisk: string; issues: { type: string; severity: string; description: string; action: string }[]; safeToPublish: boolean };
+    design: { designScore: number; scrollStopPower: number; feedback: string; topActions: string[]; styleReferences: { name: string; description: string }[] };
+  };
+}
 
 interface ReportData {
   id: string;
@@ -15,9 +23,17 @@ interface ReportData {
   title: string;
   content: string;
   results: any[];
-  images: string[];
+  images: ReportImage[];
   createdAt: string;
   shareCount: number;
+}
+
+function formatUTC8(utcStr: string): string {
+  const d = new Date(utcStr + (utcStr.endsWith('Z') ? '' : 'Z'));
+  const offset = d.getTime() + 8 * 3600 * 1000;
+  const utc8 = new Date(offset);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${utc8.getUTCFullYear()}/${pad(utc8.getUTCMonth() + 1)}/${pad(utc8.getUTCDate())} ${pad(utc8.getUTCHours())}:${pad(utc8.getUTCMinutes())}:${pad(utc8.getUTCSeconds())}`;
 }
 
 export default function ReportClient({ report }: { report: ReportData }) {
@@ -52,7 +68,7 @@ export default function ReportClient({ report }: { report: ReportData }) {
       <header className="text-center pt-28 pb-8 px-4">
         <div className="section-label mb-2">SocialFlow Report</div>
         <h1 className="text-3xl font-extrabold tracking-tight text-white">{t('检测报告', 'Analysis Report')}</h1>
-        <p className="text-zinc-600 text-xs mt-2 font-mono">{new Date(report.createdAt).toLocaleString('zh-CN')}</p>
+        <p className="text-zinc-600 text-xs mt-2 font-mono">{formatUTC8(report.createdAt)}</p>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 pb-20">
@@ -82,12 +98,78 @@ export default function ReportClient({ report }: { report: ReportData }) {
 
             {report.images.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {report.images.map((src, i) => (
-                  <img key={i} src={src} alt={`Image ${i + 1}`} className="h-20 rounded-lg object-cover border border-white/[0.06]" />
+                {report.images.map((img, i) => (
+                  <img key={i} src={img.src} alt={`Image ${i + 1}`} className="h-20 rounded-lg object-cover border border-white/[0.06]" />
                 ))}
               </div>
             )}
           </div>
+
+          {/* ══════ SECTION A2: Image Analysis ══════ */}
+          {report.images.some(img => img.analysis) && (
+            <div className="glass-elevated p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <ImageIcon size={14} className="text-cyan-400" />
+                <span className="section-label">{t('配图点评', 'Image Review')}</span>
+              </div>
+              <div className="space-y-4">
+                {report.images.map((img, idx) => {
+                  if (!img.analysis) return null;
+                  const a = img.analysis;
+                  return (
+                    <div key={idx} className="flex gap-4 p-4 rounded-xl bg-white/[0.015] border border-white/[0.04]">
+                      <img src={img.src} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0 border border-white/[0.06]" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2.5 flex-wrap">
+                          <ScoreRing score={a.design.designScore} label={t('设计', 'Design')} size={44} />
+                          <ScoreRing score={a.design.scrollStopPower} label={t('停留', 'Stop')} size={44} />
+                          <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-md', a.compliance.safeToPublish ? 'grade-s' : 'grade-c')}>
+                            {a.compliance.safeToPublish ? t('✓ 安全', '✓ Safe') : t('✕ 风险', '✕ Risk')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed mb-2">{a.design.feedback}</p>
+                        {a.design.topActions.length > 0 && (
+                          <div className="space-y-1 mb-2">
+                            {a.design.topActions.map((action, j) => (
+                              <div key={j} className="flex items-start gap-1.5 text-[10px] text-zinc-500">
+                                <span className="text-violet-400 mt-0.5 shrink-0">→</span><span>{action}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {a.compliance.issues.length > 0 && (
+                          <div className="space-y-1">
+                            {a.compliance.issues.map((issue, j) => (
+                              <div key={j} className="flex items-start gap-1.5 text-[10px]">
+                                <span className={cn('shrink-0 mt-0.5', issue.severity === 'high' ? 'text-red-400' : issue.severity === 'medium' ? 'text-amber-400' : 'text-zinc-500')}>⚠</span>
+                                <div>
+                                  <span className="text-zinc-300">{issue.description}</span>
+                                  {issue.action && <span className="text-zinc-600 ml-1">· {issue.action}</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {a.design.styleReferences?.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-white/[0.04]">
+                            <div className="flex items-center gap-1 mb-1">
+                              <Eye size={10} className="text-zinc-600" />
+                              <span className="text-[9px] text-zinc-600 uppercase tracking-wider font-bold">{t('参考风格', 'Style Ref')}</span>
+                            </div>
+                            {a.design.styleReferences.map((ref, j) => (
+                              <div key={j} className="text-[10px] text-zinc-500">
+                                <span className="text-zinc-400 font-medium">{ref.name}</span> — {ref.description}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ══════ SECTION B: Score Dashboard ══════ */}
           <div className="glass-elevated p-6">
