@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Share2, Download, Sparkles } from 'lucide-react';
 import ScoreRing from '@/components/ScoreRing';
 import { cn, statusBadge, scoreColor } from '@/lib/utils';
+import { useLang } from '@/lib/lang-context';
 
 const RadarChart = dynamic(() => import('@/components/RadarChart'), { ssr: false });
 
@@ -12,16 +13,17 @@ interface ReportData { id: string; platforms: string[]; title: string; content: 
 
 export default function ReportClient({ report }: { report: ReportData }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const { lang: uiLang, t } = useLang();
   const primary = report.results[0];
-  const isZh = primary?.language === 'zh';
+  const isZh = uiLang === 'zh';
 
   const handleShare = useCallback(async () => {
     const url = window.location.href;
-    const text = isZh ? `我的${primary.platformName}内容评分 ${primary.overallScore}/100` : `My ${primary.platformName} content scored ${primary.overallScore}/100`;
+    const text = isZh ? `我的${primary.platformName}内容评分 ${primary.overallScore}/100` : `My ${primary.platformName} content scored ${primary.overallScore}/100`; // eslint-disable-line @typescript-eslint/no-unused-vars
     fetch(`/api/report?id=${report.id}&action=share`).catch(() => {});
     if (navigator.share) { try { await navigator.share({ title: 'SocialFlow Report', text, url }); return; } catch {} }
     await navigator.clipboard.writeText(`${text}\n${url}`).catch(() => {});
-    alert(isZh ? '链接已复制' : 'Link copied');
+    alert(t('链接已复制', 'Link copied'));
   }, [report.id, primary, isZh]);
 
   const handleDownload = useCallback(async () => {
@@ -30,7 +32,7 @@ export default function ReportClient({ report }: { report: ReportData }) {
     try { const d = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: '#000' }); const a = document.createElement('a'); a.download = `socialflow-${report.id}.png`; a.href = d; a.click(); } catch {}
   }, [report.id]);
 
-  const badge = statusBadge(primary.status, isZh ? 'zh' : 'en');
+  const badge = statusBadge(primary.status, uiLang);
 
   return (
     <div className="min-h-screen">
@@ -49,22 +51,22 @@ export default function ReportClient({ report }: { report: ReportData }) {
           {report.title && <div className="text-sm font-medium text-zinc-300 mb-4 truncate">{report.title}</div>}
           <div className="flex items-center justify-between mb-5">
             <div>
-              <div className="section-label mb-1">{isZh ? '综合评分' : 'Overall'}</div>
+              <div className="section-label mb-1">{t('综合评分', 'Overall')}</div>
               <div className="text-5xl font-extrabold tracking-tight" style={{ color: scoreColor(primary.overallScore) }}>
                 {primary.overallScore}<span className="text-lg text-zinc-600">/100</span>
               </div>
             </div>
             <div className="grid grid-cols-4 gap-2">
-              <ScoreRing score={primary.scores.compliance} label={isZh ? '合规' : 'Comply'} size={48} />
-              <ScoreRing score={primary.scores.engagement} label={isZh ? '互动' : 'Engage'} size={48} />
+              <ScoreRing score={primary.scores.compliance} label={t('合规', 'Comply')} size={48} />
+              <ScoreRing score={primary.scores.engagement} label={t('互动', 'Engage')} size={48} />
               <ScoreRing score={primary.scores.viral} label="Viral" size={48} />
-              <ScoreRing score={primary.scores.algorithm} label={isZh ? '算法' : 'Algo'} size={48} />
+              <ScoreRing score={primary.scores.algorithm} label={t('算法', 'Algo')} size={48} />
             </div>
           </div>
-          <RadarChart scores={primary.scores} lang={isZh ? 'zh' : 'en'} />
+          <RadarChart scores={primary.scores} lang={uiLang} />
           {primary.violations?.length > 0 && (
             <div className="mt-4 p-3 rounded-xl bg-red-500/[0.04] border border-red-500/10">
-              <div className="text-xs font-bold text-red-400 mb-1.5">⚠️ {primary.violations.length} {isZh ? '个问题' : 'issue(s)'}</div>
+              <div className="text-xs font-bold text-red-400 mb-1.5">⚠️ {primary.violations.length} {t('个问题', 'issue(s)')}</div>
               {primary.violations.slice(0, 5).map((v: any, i: number) => <div key={i} className="text-[10px] text-red-300/70 mb-0.5">• {v.name}: {v.keyword}</div>)}
             </div>
           )}
@@ -75,13 +77,13 @@ export default function ReportClient({ report }: { report: ReportData }) {
         </div>
 
         <div className="flex gap-3 mb-6">
-          <button onClick={handleShare} className="btn-primary flex-1 py-3 text-sm flex items-center justify-center gap-2"><Share2 size={14} /> {isZh ? '分享' : 'Share'}</button>
-          <button onClick={handleDownload} className="btn-ghost flex-1 py-3 text-sm flex items-center justify-center gap-2"><Download size={14} /> {isZh ? '保存图片' : 'Save Image'}</button>
+          <button onClick={handleShare} className="btn-primary flex-1 py-3 text-sm flex items-center justify-center gap-2"><Share2 size={14} /> {t('分享', 'Share')}</button>
+          <button onClick={handleDownload} className="btn-ghost flex-1 py-3 text-sm flex items-center justify-center gap-2"><Download size={14} /> {t('保存图片', 'Save Image')}</button>
         </div>
 
         <div className="glass-elevated p-8 text-center">
-          <p className="text-sm text-zinc-400 mb-4">{isZh ? '检测你的社媒内容' : 'Check your content'}</p>
-          <a href="/" className="btn-primary inline-flex items-center gap-2 px-8 py-3 text-sm"><Sparkles size={14} /> {isZh ? '免费检测' : 'Free Check'}</a>
+          <p className="text-sm text-zinc-400 mb-4">{t('检测你的社媒内容', 'Check your content')}</p>
+          <a href="/" className="btn-primary inline-flex items-center gap-2 px-8 py-3 text-sm"><Sparkles size={14} /> {t('免费检测', 'Free Check')}</a>
         </div>
       </main>
 
