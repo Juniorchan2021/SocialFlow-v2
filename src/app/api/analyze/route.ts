@@ -3,7 +3,8 @@ import { analyzeContent, type ScoreResult } from '@/lib/scoring';
 import { aiAnalyzeContent } from '@/lib/ai-client';
 import { simulateAlgorithm, type AlgoSimResult } from '@/lib/algorithm-sim';
 import { predictViral, type ViralPrediction } from '@/lib/viral-predictor';
-import { addHistory } from '@/lib/db';
+import { addHistory, saveReport } from '@/lib/db';
+import { nanoid } from 'nanoid';
 import type { Platform } from '@/lib/rules';
 
 export async function POST(req: NextRequest) {
@@ -46,21 +47,26 @@ export async function POST(req: NextRequest) {
       } catch { item.aiAnalysis = null; }
     }));
 
-    // Save to history
+    // Auto-save report + history so every analysis is retrievable
+    let reportId: string | undefined;
     try {
       const primary = results[0];
+      reportId = nanoid(10);
+      saveReport({ id: reportId, platforms, title: title || '', content, twitterLang, results });
       addHistory({
+        reportId,
         platforms,
         title: title || '',
         contentPreview: content.slice(0, 100),
         overallScore: primary.overallScore,
         status: primary.status,
       });
-    } catch { /* history save is non-critical */ }
+    } catch { /* storage is non-critical */ }
 
     return NextResponse.json({
       success: true,
       data: results,
+      reportId: reportId || null,
       aiEnabled: !!process.env.ANTHROPIC_API_KEY,
       timestamp: new Date().toISOString(),
     });

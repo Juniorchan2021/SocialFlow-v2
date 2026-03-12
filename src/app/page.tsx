@@ -47,6 +47,7 @@ export default function Home() {
   const [abLoading, setAbLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [savedReportId, setSavedReportId] = useState<string | null>(null);
 
   const togglePlatform = (p: Platform) => {
     setSelectedPlatforms(prev =>
@@ -92,12 +93,12 @@ export default function Home() {
 
   const analyze = useCallback(async () => {
     if (!content.trim() && !title.trim()) return;
-    setAnalyzing(true); setResults(null); setRewriteResult(null);
+    setAnalyzing(true); setResults(null); setRewriteResult(null); setSavedReportId(null); setShareUrl(null);
     let freshResults: any[] | null = null;
     try {
       const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, platforms: selectedPlatforms, twitterLang }) });
       const json = await res.json();
-      if (json.success) { freshResults = json.data; setResults(json.data); setActiveTab(json.data[0]?.platform || selectedPlatforms[0]); }
+      if (json.success) { freshResults = json.data; setResults(json.data); setActiveTab(json.data[0]?.platform || selectedPlatforms[0]); if (json.reportId) setSavedReportId(json.reportId); }
     } catch (err) { console.error('Analysis failed:', err); }
     if (images.length > 0 && freshResults) {
       const pp = selectedPlatforms[0]; const lang = pp === 'xhs' ? 'zh' : pp === 'twitter' ? twitterLang : 'en';
@@ -155,13 +156,13 @@ export default function Home() {
       const validThumbnails = imageThumbnails.filter(Boolean);
       const res = await fetch('/api/report', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platforms: selectedPlatforms, title, content, twitterLang, results, imageThumbnails: validThumbnails }),
+        body: JSON.stringify({ existingId: savedReportId, platforms: selectedPlatforms, title, content, twitterLang, results, imageThumbnails: validThumbnails }),
       });
       const json = await res.json();
-      if (json.success) { setShareUrl(json.reportUrl); try { await navigator.clipboard.writeText(json.reportUrl); } catch {} }
+      if (json.success) { setShareUrl(json.reportUrl); setSavedReportId(json.reportId); try { await navigator.clipboard.writeText(json.reportUrl); } catch {} }
     } catch {}
     setSharing(false);
-  }, [results, selectedPlatforms, title, content, twitterLang, images, resizeToThumbnail]);
+  }, [results, savedReportId, selectedPlatforms, title, content, twitterLang, images, resizeToThumbnail]);
 
   const { lang: uiLang, t } = useLang();
   const activeResult = results?.find((r: any) => r.platform === activeTab);
