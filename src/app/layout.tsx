@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
+import { LangProvider } from "@/lib/lang-context";
 
 export const metadata: Metadata = {
   title: "SocialFlow — 社媒内容与视觉智能检测",
@@ -28,11 +29,13 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
-        <div className="ambient-bg" />
-        <Navigation />
-        <div className="relative z-10">
-          {children}
-        </div>
+        <LangProvider>
+          <div className="ambient-bg" />
+          <Navigation />
+          <div className="relative z-10">
+            {children}
+          </div>
+        </LangProvider>
       </body>
     </html>
   );

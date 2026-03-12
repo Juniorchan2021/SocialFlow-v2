@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Upload, ArrowRight, Share2, Download, Zap, Shield, TrendingUp, Flame } from 'lucide-react';
 import ScoreRing from '@/components/ScoreRing';
 import { cn, statusBadge, scoreColor } from '@/lib/utils';
+import { useLang } from '@/lib/lang-context';
 
 const RadarChart = dynamic(() => import('@/components/RadarChart'), { ssr: false });
 
@@ -135,8 +136,9 @@ export default function Home() {
     setSharing(false);
   }, [results, selectedPlatforms, title, content, twitterLang]);
 
+  const { lang: uiLang, t } = useLang();
   const activeResult = results?.find((r: any) => r.platform === activeTab);
-  const isZh = activeResult?.language === 'zh';
+  const isZh = uiLang === 'zh';
 
   return (
     <div className="min-h-screen">
@@ -144,10 +146,10 @@ export default function Home() {
       <header className="text-center pt-28 pb-12 px-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
           <h1 className="text-5xl md:text-6xl font-extrabold tracking-[-0.04em] text-white leading-[1.1]">
-            Create & Check
+            {t('创作 & 检测', 'Create & Check')}
           </h1>
           <p className="text-zinc-500 mt-4 text-lg tracking-tight">
-            撰写内容，AI 全维度实时检测 · 5 平台 · 8 维评分 · 配图分析
+            {t('撰写内容，AI 全维度实时检测 · 5 平台 · 8 维评分 · 配图分析', 'Write content, AI full-dimension detection · 5 platforms · 8D scoring · Image analysis')}
           </p>
         </motion.div>
       </header>
@@ -189,7 +191,7 @@ export default function Home() {
               <span className={cn('text-[10px] font-mono tabular-nums', title.length > 60 ? 'text-red-400' : 'text-zinc-600')}>{title.length}</span>
             </div>
             <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="Enter a captivating title..."
+              placeholder={t('输入一个吸引眼球的标题...', 'Enter a captivating title...')}
               className="input-clean text-xl font-semibold border-b border-white/[0.04] pb-3 focus:border-violet-500/40 transition-colors" />
           </div>
 
@@ -230,7 +232,7 @@ export default function Home() {
               <span className={cn('text-[10px] font-mono tabular-nums', content.length > 280 && selectedPlatforms.includes('twitter') ? 'text-red-400' : 'text-zinc-600')}>{content.length}</span>
             </div>
             <textarea value={content} onChange={e => setContent(e.target.value)}
-              placeholder="Start writing your story here..."
+              placeholder={t('粘贴要检测的社媒文案...', 'Start writing your story here...')}
               rows={6}
               className="input-clean text-[15px] leading-relaxed resize-y min-h-[160px]" />
           </div>
@@ -241,7 +243,7 @@ export default function Home() {
               <span className="section-label">Images</span>
               <span className={cn('text-[9px] px-2 py-0.5 rounded-full font-medium transition-all',
                 pasteFlash ? 'bg-green-500/15 text-green-400' : 'bg-white/[0.03] text-zinc-600')}>
-                {pasteFlash ? '✓ Pasted' : '⌘V paste · drag · click'}
+                {pasteFlash ? t('✓ 已粘贴', '✓ Pasted') : t('⌘V 粘贴 · 拖拽 · 点击', '⌘V paste · drag · click')}
               </span>
             </div>
             <div ref={dropRef} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
@@ -269,7 +271,7 @@ export default function Home() {
                     <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
                   </label>
                 )}
-                {images.length === 0 && <div className="flex-1 flex items-center justify-center py-3 text-xs text-zinc-700 select-none">Paste screenshots · Drag images · Click +</div>}
+                {images.length === 0 && <div className="flex-1 flex items-center justify-center py-3 text-xs text-zinc-700 select-none">{t('粘贴截图 · 拖拽图片 · 点击 +', 'Paste screenshots · Drag images · Click +')}</div>}
               </div>
             </div>
           </div>
@@ -279,9 +281,9 @@ export default function Home() {
             className={cn('btn-primary w-full py-4 text-sm flex items-center justify-center gap-2.5 disabled:opacity-30 disabled:cursor-not-allowed',
               analyzing && 'animate-scan')}>
             {analyzing ? (
-              <><div className="w-4 h-4 border-2 border-zinc-800/40 border-t-zinc-800 rounded-full animate-spin" />Intelligence Scan...</>
+              <><div className="w-4 h-4 border-2 border-zinc-800/40 border-t-zinc-800 rounded-full animate-spin" />{t('检测中...', 'Scanning...')}</>
             ) : (
-              <><Sparkles size={16} />Run Intelligence Scan</>
+              <><Sparkles size={16} />{t('开始全面检测', 'Run Intelligence Scan')}</>
             )}
           </button>
         </motion.div>
@@ -311,7 +313,7 @@ export default function Home() {
               {activeResult && (
                 <div className="space-y-4">
                   {/* Status Banner */}
-                  {(() => { const b = statusBadge(activeResult.status, isZh ? 'zh' : 'en'); return (
+                  {(() => { const b = statusBadge(activeResult.status, uiLang); return (
                     <div className={cn('flex items-center gap-3 px-5 py-3.5 rounded-2xl border', b.cls)}>
                       <span className="text-lg">{b.icon}</span><span className="text-sm font-medium">{b.text}</span>
                     </div>
@@ -323,7 +325,7 @@ export default function Home() {
                     <div className="glass-elevated p-6">
                       <div className="flex items-start justify-between mb-6">
                         <div>
-                          <div className="section-label mb-2">{isZh ? '综合评分' : 'Overall Score'}</div>
+                          <div className="section-label mb-2">{t('综合评分', 'Overall Score')}</div>
                           <div className="text-5xl font-extrabold tracking-tight score-enter" style={{ color: scoreColor(activeResult.overallScore) }}>
                             {activeResult.overallScore}<span className="text-xl font-normal text-zinc-600">/100</span>
                           </div>
@@ -337,16 +339,16 @@ export default function Home() {
                         )}
                       </div>
                       <div className="grid grid-cols-4 gap-2">
-                        <ScoreRing score={activeResult.scores.compliance} label={isZh ? '合规' : 'Comply'} size={56} />
-                        <ScoreRing score={activeResult.scores.engagement} label={isZh ? '互动' : 'Engage'} size={56} />
+                        <ScoreRing score={activeResult.scores.compliance} label={t('合规', 'Comply')} size={56} />
+                        <ScoreRing score={activeResult.scores.engagement} label={t('互动', 'Engage')} size={56} />
                         <ScoreRing score={activeResult.scores.viral} label="Viral" size={56} />
-                        <ScoreRing score={activeResult.scores.algorithm} label={isZh ? '算法' : 'Algo'} size={56} />
+                        <ScoreRing score={activeResult.scores.algorithm} label={t('算法', 'Algo')} size={56} />
                       </div>
                     </div>
 
                     {/* Right: Radar Chart */}
                     <div className="glass-elevated p-6 flex items-center justify-center">
-                      <RadarChart scores={activeResult.scores} lang={isZh ? 'zh' : 'en'} />
+                      <RadarChart scores={activeResult.scores} lang={uiLang} />
                     </div>
                   </div>
 
@@ -357,7 +359,7 @@ export default function Home() {
                       <div className="glass-elevated p-6">
                         <div className="flex items-center gap-2 mb-4">
                           <Flame size={14} className="text-orange-400" />
-                          <span className="section-label">{isZh ? '爆款预测' : 'Viral Prediction'}</span>
+                          <span className="section-label">{t('爆款预测', 'Viral Prediction')}</span>
                         </div>
                         <div className="flex items-center gap-4 mb-5">
                           <div className={cn('text-4xl font-extrabold tracking-tight',
@@ -366,7 +368,7 @@ export default function Home() {
                           </div>
                           <span className={cn('text-xs font-bold px-3 py-1 rounded-full',
                             activeResult.viralPrediction.probability === 'high' ? 'grade-s' : activeResult.viralPrediction.probability === 'medium' ? 'grade-b' : 'grade-d')}>
-                            {activeResult.viralPrediction.probability === 'high' ? (isZh ? '高概率' : 'High') : activeResult.viralPrediction.probability === 'medium' ? (isZh ? '有潜力' : 'Medium') : (isZh ? '需提升' : 'Low')}
+                            {activeResult.viralPrediction.probability === 'high' ? t('高概率', 'High') : activeResult.viralPrediction.probability === 'medium' ? t('有潜力', 'Medium') : t('需提升', 'Low')}
                           </span>
                         </div>
                         <div className="space-y-2.5">
@@ -414,12 +416,12 @@ export default function Home() {
                     <div className="glass-elevated p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <Shield size={14} className="text-red-400" />
-                        <span className="section-label">{isZh ? `${activeResult.violations.length} 个违规` : `${activeResult.violations.length} Violation(s)`}</span>
+                        <span className="section-label">{t(`${activeResult.violations.length} 个违规`, `${activeResult.violations.length} Violation(s)`)}</span>
                       </div>
                       <div className="space-y-2">
                         {activeResult.violations.map((v: any, i: number) => (
                           <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border-l-[3px]" style={{ borderLeftColor: v.color }}>
-                            <div><div className="text-xs font-semibold" style={{ color: v.color }}>{v.name}</div><div className="text-[11px] text-zinc-500">{isZh ? '触发词' : 'Keyword'}：<span className="text-zinc-300 font-mono">{v.keyword}</span></div></div>
+                            <div><div className="text-xs font-semibold" style={{ color: v.color }}>{v.name}</div><div className="text-[11px] text-zinc-500">{t('触发词', 'Keyword')}：<span className="text-zinc-300 font-mono">{v.keyword}</span></div></div>
                           </div>
                         ))}
                       </div>
@@ -431,12 +433,12 @@ export default function Home() {
                     <div className="glass-elevated p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <TrendingUp size={14} className="text-indigo-400" />
-                        <span className="section-label">{isZh ? '优化建议' : 'Optimizations'}</span>
+                        <span className="section-label">{t('优化建议', 'Optimizations')}</span>
                       </div>
                       <div className="space-y-3">
                         {activeResult.optimizations.map((opt: any, i: number) => {
                           const priCls: Record<string, string> = { critical: 'grade-c', high: 'grade-b', medium: 'grade-a', low: 'grade-d' };
-                          const priLbl: Record<string, string> = isZh ? { critical: '紧急', high: '重要', medium: '建议', low: '可选' } : { critical: 'URGENT', high: 'HIGH', medium: 'TIP', low: 'OPT' };
+                          const priLbl: Record<string, string> = uiLang === 'zh' ? { critical: '紧急', high: '重要', medium: '建议', low: '可选' } : { critical: 'URGENT', high: 'HIGH', medium: 'TIP', low: 'OPT' };
                           return (
                             <div key={i} className="p-4 rounded-xl bg-white/[0.015] border border-white/[0.04] hover:border-white/[0.08] transition-colors">
                               <div className="flex items-center gap-2 mb-2">
@@ -464,7 +466,7 @@ export default function Home() {
                   {/* A/B Title Results */}
                   {abResults && (
                     <div className="glass-elevated p-6">
-                      <span className="section-label mb-4 block">{isZh ? 'A/B 标题对比' : 'A/B Title Results'}</span>
+                      <span className="section-label mb-4 block">{t('A/B 标题对比', 'A/B Title Results')}</span>
                       <div className="space-y-2">
                         {abResults.rankings.map((r: any) => (
                           <div key={r.rank} className={cn('p-3 rounded-xl border transition-colors', r.rank === 1 ? 'bg-green-500/[0.03] border-green-500/15' : 'bg-white/[0.01] border-white/[0.04]')}>
@@ -487,7 +489,7 @@ export default function Home() {
                               <span className="text-sm text-violet-300 flex-1">{abResults.aiSuggestion.title}</span>
                               <span className="text-sm font-bold tabular-nums" style={{ color: scoreColor(abResults.aiSuggestion.overallScore) }}>{abResults.aiSuggestion.overallScore}</span>
                             </div>
-                            <button onClick={() => setTitle(abResults.aiSuggestion.title)} className="btn-ghost text-[10px] px-3 py-1">{isZh ? '采用此标题' : 'Use this title'}</button>
+                            <button onClick={() => setTitle(abResults.aiSuggestion.title)} className="btn-ghost text-[10px] px-3 py-1">{t('采用此标题', 'Use this title')}</button>
                           </div>
                         )}
                       </div>
@@ -497,14 +499,14 @@ export default function Home() {
                   {/* Image Analysis */}
                   {images.some(img => img.analysis) && (
                     <div className="glass-elevated p-6">
-                      <span className="section-label mb-4 block">{isZh ? '配图分析' : 'Image Analysis'}</span>
+                      <span className="section-label mb-4 block">{t('配图分析', 'Image Analysis')}</span>
                       <div className="space-y-3">
                         {images.map((img, idx) => { if (!img.analysis) return null; const a = img.analysis; return (
                           <div key={idx} className="flex gap-4 p-4 rounded-xl bg-white/[0.015] border border-white/[0.04]">
                             <img src={img.preview} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0" />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-2">
-                                <ScoreRing score={a.design.designScore} label={isZh ? '设计' : 'Design'} size={44} />
+                                <ScoreRing score={a.design.designScore} label={t('设计', 'Design')} size={44} />
                                 <ScoreRing score={a.design.scrollStopPower} label="Stop" size={44} />
                                 <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-md', a.compliance.safeToPublish ? 'grade-s' : 'grade-c')}>
                                   {a.compliance.safeToPublish ? '✓ Safe' : '✕ Risk'}
@@ -554,7 +556,7 @@ export default function Home() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {activeResult.hashtagSuggestions.length > 0 && (
                       <div className="glass-elevated p-6">
-                        <span className="section-label mb-3 block">{isZh ? '推荐标签' : 'Hashtags'}</span>
+                        <span className="section-label mb-3 block">{t('推荐标签', 'Hashtags')}</span>
                         <div className="flex flex-wrap gap-1.5">
                           {activeResult.hashtagSuggestions.map((h: string, i: number) => (
                             <button key={i} onClick={() => navigator.clipboard.writeText(h).catch(() => {})}
@@ -565,7 +567,7 @@ export default function Home() {
                     )}
                     {activeResult.viralFormulas.length > 0 && (
                       <div className="glass-elevated p-6">
-                        <span className="section-label mb-3 block">{isZh ? '爆文公式' : 'Viral Formulas'}</span>
+                        <span className="section-label mb-3 block">{t('爆文公式', 'Viral Formulas')}</span>
                         <div className="space-y-2">
                           {activeResult.viralFormulas.map((f: any, i: number) => (
                             <div key={i} className="p-2.5 rounded-lg bg-white/[0.015] border border-white/[0.04]">
@@ -580,12 +582,12 @@ export default function Home() {
 
                   {/* Rewrite Buttons */}
                   <div className="glass-elevated p-6">
-                    <span className="section-label mb-4 block">{isZh ? '智能改写' : 'AI Rewrite'}</span>
+                    <span className="section-label mb-4 block">{t('智能改写', 'AI Rewrite')}</span>
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { mode: 'compliance' as const, icon: Shield, label: isZh ? '合规改写' : 'Compliance', desc: isZh ? '移除违规' : 'Fix violations' },
-                        { mode: 'algorithm' as const, icon: Zap, label: isZh ? '算法优化' : 'Algorithm', desc: isZh ? '提升权重' : 'Boost ranking' },
-                        { mode: 'viral' as const, icon: Flame, label: isZh ? '爆款改写' : 'Viral', desc: isZh ? '用爆文公式' : 'Apply formulas' },
+                        { mode: 'compliance' as const, icon: Shield, label: t('合规改写', 'Compliance'), desc: t('移除违规', 'Fix violations') },
+                        { mode: 'algorithm' as const, icon: Zap, label: t('算法优化', 'Algorithm'), desc: t('提升权重', 'Boost ranking') },
+                        { mode: 'viral' as const, icon: Flame, label: t('爆款改写', 'Viral'), desc: t('用爆文公式', 'Apply formulas') },
                       ].map(({ mode, icon: Icon, label, desc }) => (
                         <button key={mode} onClick={() => handleRewrite(mode)} disabled={!!rewriting}
                           className="btn-ghost p-4 text-left disabled:opacity-30 group">
@@ -601,14 +603,14 @@ export default function Home() {
                         <div className="text-sm text-zinc-300 whitespace-pre-wrap mb-3">{rewriteResult.rewrittenContent}</div>
                         {rewriteResult.changes?.map((c: string, i: number) => <div key={i} className="text-[10px] text-zinc-500 flex items-start gap-1.5 mb-0.5"><span className="text-green-500">•</span>{c}</div>)}
                         <button onClick={() => navigator.clipboard.writeText((rewriteResult.rewrittenTitle || '') + '\n\n' + rewriteResult.rewrittenContent).catch(() => {})}
-                          className="btn-ghost text-[10px] px-3 py-1 mt-3">📋 {isZh ? '复制' : 'Copy'}</button>
+                          className="btn-ghost text-[10px] px-3 py-1 mt-3">📋 {t('复制', 'Copy')}</button>
                       </motion.div>
                     )}
                   </div>
 
                   {/* Share */}
                   <div className="glass-elevated p-8 text-center">
-                    <p className="text-sm text-zinc-400 mb-4">{isZh ? '生成可分享的检测报告' : 'Generate a shareable report'}</p>
+                    <p className="text-sm text-zinc-400 mb-4">{t('生成可分享的检测报告', 'Generate a shareable report')}</p>
                     <button onClick={handleShareReport} disabled={sharing}
                       className="btn-primary px-8 py-3 text-sm inline-flex items-center gap-2 disabled:opacity-30">
                       {sharing ? 'Generating...' : <><Share2 size={14} /> Share Report</>}
@@ -629,7 +631,7 @@ export default function Home() {
         {/* Viral boost tips — shown below results */}
         {activeResult?.viralPrediction?.boostTips?.length > 0 && (
           <div className="mt-4 glass-elevated p-6">
-            <div className="flex items-center gap-2 mb-3"><Zap size={14} className="text-amber-400" /><span className="section-label">{isZh ? '提升建议' : 'Boost Tips'}</span></div>
+            <div className="flex items-center gap-2 mb-3"><Zap size={14} className="text-amber-400" /><span className="section-label">{t('提升建议', 'Boost Tips')}</span></div>
             {activeResult.viralPrediction.boostTips.map((tip: string, i: number) => (
               <div key={i} className="flex items-start gap-2 text-[11px] text-zinc-400 py-1.5"><span className="text-amber-400">⚡</span><span>{tip}</span></div>
             ))}
