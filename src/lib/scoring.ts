@@ -88,7 +88,19 @@ export function detectContentType(title: string, content: string): ContentType {
 
 // --- Violation Check ---
 
-export function checkViolations(title: string, content: string, platform: Platform, lang: 'zh' | 'en'): { violations: Violation[]; complianceScore: number } {
+const VIOLATION_NAME_ZH: Record<string, string> = {
+  'Community Guidelines Violation': '社区准则违规',
+  'Community Standard Violation': '社区标准违规',
+  'Demonetization Risk': '取消变现风险',
+  'Shadowban Risk': '限流风险',
+  'Reduced Distribution Risk': '降低分发风险',
+  'Engagement Bait': '互动诱饵',
+  'Spam Signal': '垃圾信号',
+  'Policy Violation': '政策违规',
+  'Clickbait Risk': '标题党风险',
+};
+
+export function checkViolations(title: string, content: string, platform: Platform, lang: 'zh' | 'en', uiLang: 'zh' | 'en' = 'en'): { violations: Violation[]; complianceScore: number } {
   const rules = PLATFORM_RULES[platform];
   const violations: Violation[] = [];
   const seen = new Set<string>();
@@ -110,7 +122,8 @@ export function checkViolations(title: string, content: string, platform: Platfo
       const kl = keyword.toLowerCase();
       if (fullText.includes(kl) && !seen.has(kl)) {
         seen.add(kl);
-        violations.push({ level: level as Violation['level'], name: rule.name, keyword, color: rule.color });
+        const displayName = uiLang === 'zh' ? (VIOLATION_NAME_ZH[rule.name] || rule.name) : rule.name;
+        violations.push({ level: level as Violation['level'], name: displayName, keyword, color: rule.color });
         score -= level === 'critical' ? 50 : level === 'high' ? 25 : level === 'medium' ? 15 : 8;
       }
     }
@@ -280,74 +293,70 @@ function calcSearchSEO(platform: Platform, title: string, content: string, s: St
 
 // --- Optimization Generator ---
 
-function generateOptimizations(platform: Platform, title: string, content: string, s: StructureAnalysis, violations: Violation[], lang: 'zh' | 'en'): Optimization[] {
+function generateOptimizations(platform: Platform, title: string, content: string, s: StructureAnalysis, violations: Violation[], lang: 'zh' | 'en', uiLang: 'zh' | 'en' = 'en'): Optimization[] {
   const opts: Optimization[] = [];
-  const isZh = lang === 'zh';
+  const isZh = uiLang === 'zh';
+  const t = (zh: string, en: string) => isZh ? zh : en;
 
   const criticals = violations.filter(v => v.level === 'critical');
   if (criticals.length > 0) {
+    const kw = criticals.map(v => `"${v.keyword}"`);
     opts.push({
       priority: 'critical',
-      category: isZh ? '合规' : 'Compliance',
-      direction: isZh
-        ? `检测到 ${criticals.length} 个严重违规词，发布将被屏蔽或封号`
-        : `${criticals.length} critical violation(s) detected — post will be removed`,
-      example: isZh
-        ? `违规词：${criticals.map(v => `"${v.keyword}"`).join('、')}`
-        : `Violation terms: ${criticals.map(v => `"${v.keyword}"`).join(', ')}`,
-      actions: isZh
-        ? ['立即删除或替换所有违规词', '使用合规替代表述（如"加密货币"→"数字支付"）', '检查配图中是否也包含这些违规词']
-        : ['Remove or replace all violation terms immediately', 'Use compliant alternatives', 'Check images for same violations'],
+      category: t('合规', 'Compliance'),
+      direction: t(`检测到 ${criticals.length} 个严重违规词，发布将被屏蔽或封号`, `${criticals.length} critical violation(s) detected — post will be removed`),
+      example: t(`违规词：${kw.join('、')}`, `Violation terms: ${kw.join(', ')}`),
+      actions: t('立即删除或替换所有违规词;使用合规替代表述（如"加密货币"→"数字支付"）;检查配图中是否也包含这些违规词', 'Remove or replace all violation terms immediately;Use compliant alternatives;Check images for same violations').split(';'),
     });
   }
 
   if (platform === 'xhs') {
     if (!title) {
-      opts.push({ priority: 'high', category: '标题', direction: '未填写标题，小红书标题是搜索流量入口', example: '"亲测！这个方法真的让我改变了..."', actions: ['填写10-20字标题', '包含核心关键词+情绪词', '加入具体数字'] });
+      opts.push({ priority: 'high', category: t('标题', 'Title'), direction: t('未填写标题，小红书标题是搜索流量入口', 'No title — Xiaohongshu titles are the main search traffic entry point'), example: '"亲测！这个方法真的让我改变了..."', actions: [t('填写10-20字标题', 'Write a 10-20 char title'), t('包含核心关键词+情绪词', 'Include core keywords + emotion words'), t('加入具体数字', 'Add specific numbers')] });
     } else if (title.length < 10) {
-      opts.push({ priority: 'high', category: '标题', direction: `标题过短（${title.length}字），不利于搜索曝光`, example: `"【亲测】${title}，效果超出预期！"`, actions: ['拉长至10-20字', '加入情绪词（震惊/救命/绝了）', '加入具体数字'] });
+      opts.push({ priority: 'high', category: t('标题', 'Title'), direction: t(`标题过短（${title.length}字），不利于搜索曝光`, `Title too short (${title.length} chars), hurts search visibility`), example: `"【亲测】${title}，效果超出预期！"`, actions: [t('拉长至10-20字', 'Extend to 10-20 chars'), t('加入情绪词（震惊/救命/绝了）', 'Add emotion hooks (震惊/救命/绝了)'), t('加入具体数字', 'Add specific numbers')] });
     }
     if (!s.hasHook) {
-      opts.push({ priority: 'high', category: '钩子词', direction: '缺少情绪钩子，点击率将降低60%', example: '在标题开头加："救命！" / "震惊🔥" / "姐妹必看"', actions: ['标题或首句加入钩子词', '钩子词建议：震惊/救命/绝了/宝藏/亲测', '带有情绪的标题平均点击率高30-80%'] });
+      opts.push({ priority: 'high', category: t('钩子词', 'Hook Words'), direction: t('缺少情绪钩子，点击率将降低60%', 'No emotion hook — click-through rate drops ~60%'), example: t('在标题开头加："救命！" / "震惊🔥" / "姐妹必看"', 'Add at title start: "救命!" / "震惊🔥" / "姐妹必看"'), actions: [t('标题或首句加入钩子词', 'Add hook to title or first sentence'), t('钩子词建议：震惊/救命/绝了/宝藏/亲测', 'Suggested hooks: 震惊/救命/绝了/宝藏/亲测'), t('带有情绪的标题平均点击率高30-80%', 'Emotional titles get 30-80% higher CTR')] });
     }
     if (s.hashtagCount < 3) {
-      opts.push({ priority: 'high', category: '话题标签', direction: `标签不足（${s.hashtagCount}个），搜索流量损失严重`, example: '#跨境支付 #数字支付 #全球支付卡 #海外生活 #数字游民', actions: ['增加至5-8个标签', '策略：1个大流量词 + 3个精准词 + 1个地域词', '标签放在正文末尾'] });
+      opts.push({ priority: 'high', category: t('话题标签', 'Hashtags'), direction: t(`标签不足（${s.hashtagCount}个），搜索流量损失严重`, `Only ${s.hashtagCount} hashtag(s) — major search traffic loss`), example: '#跨境支付 #数字支付 #全球支付卡 #海外生活 #数字游民', actions: [t('增加至5-8个标签', 'Increase to 5-8 hashtags'), t('策略：1个大流量词 + 3个精准词 + 1个地域词', 'Strategy: 1 high-volume + 3 precise + 1 geo tag'), t('标签放在正文末尾', 'Place tags at end of body')] });
     }
     if (!s.hasCTA) {
-      opts.push({ priority: 'medium', category: '互动引导', direction: '缺少互动引导，评论量将受影响', example: '"姐妹们有没有同款推荐？👇" / "你们平时怎么做的，评论聊聊～"', actions: ['在结尾加一句互动引导', '提问式引导效果最好', '评论数是小红书CES模型的核心权重(4分)'] });
+      opts.push({ priority: 'medium', category: t('互动引导', 'CTA'), direction: t('缺少互动引导，评论量将受影响', 'No CTA — comment volume will suffer'), example: '"姐妹们有没有同款推荐？👇" / "你们平时怎么做的，评论聊聊～"', actions: [t('在结尾加一句互动引导', 'Add a CTA question at end'), t('提问式引导效果最好', 'Question-style CTAs work best'), t('评论数是小红书CES模型的核心权重(4分)', 'Comments are the top CES weight (4 points)')] });
     }
   }
 
   if (platform === 'twitter') {
     if (content.length > 280) {
-      opts.push({ priority: 'critical', category: isZh ? '字数超限' : 'Character Limit', direction: isZh ? `超出280字符限制（当前${content.length}）` : `Exceeds 280 chars (${content.length})`, example: isZh ? '拆分为Thread（1/N），首推留最强钩子' : 'Split into a Thread (1/N). Keep strongest hook in first tweet.', actions: isZh ? ['压缩至280字符内', '或拆分为Thread格式', '首推用钩子+核心观点'] : ['Shorten to 280 chars', 'Or split into Thread format', 'First tweet = hook + core point'] });
+      opts.push({ priority: 'critical', category: t('字数超限', 'Character Limit'), direction: t(`超出280字符限制（当前${content.length}）`, `Exceeds 280 chars (${content.length})`), example: t('拆分为Thread（1/N），首推留最强钩子', 'Split into a Thread (1/N). Keep strongest hook in first tweet.'), actions: [t('压缩至280字符内', 'Shorten to 280 chars'), t('或拆分为Thread格式', 'Or split into Thread format'), t('首推用钩子+核心观点', 'First tweet = hook + core point')] });
     }
     if (!s.hasHook) {
-      opts.push({ priority: 'high', category: isZh ? '开头钩子' : 'Opening Hook', direction: isZh ? '开头平淡，用户不会展开阅读' : 'Weak opening. Users decide in 10 words whether to read on.', example: isZh ? '"圈内人不会告诉你..." / "做了3年XX，最大教训是..."' : '"Hot take: / Thread: / Nobody talks about..."', actions: isZh ? ['首句用观点/数据/悬念开场', '避免以"我觉得"等平淡开头'] : ['Lead with strongest point in first 10 words', 'Use pattern interrupts: Hot take / Thread / PSA'] });
+      opts.push({ priority: 'high', category: t('开头钩子', 'Opening Hook'), direction: t('开头平淡，用户在前10个词就决定是否继续阅读', 'Weak opening. Users decide in 10 words whether to read on.'), example: t('"圈内人不会告诉你..." / "做了3年XX，最大教训是..."', '"Hot take: / Thread: / Nobody talks about..."'), actions: [t('首句用观点/数据/悬念开场', 'Lead with strongest point in first 10 words'), t('避免平淡开头，用 Hot take / Thread / 数据 开头', 'Use pattern interrupts: Hot take / Thread / PSA')] });
     }
   }
 
   if (platform === 'instagram') {
     if (s.hashtagCount < 10) {
-      opts.push({ priority: 'high', category: 'Hashtags', direction: `Only ${s.hashtagCount} hashtags. Instagram posts with 20-30 hashtags get highest reach.`, example: 'Add mix: 5 big (#crypto 100M+) + 10 mid (#cryptolife 10K+) + 15 niche (#stablecoinpayment <10K)', actions: ['Increase to 20-30 hashtags', 'Use pyramid strategy: big + medium + niche', 'Place hashtags after a line break at the end of caption', 'Rotate hashtag sets to avoid shadowban'] });
+      opts.push({ priority: 'high', category: t('标签策略', 'Hashtags'), direction: t(`仅${s.hashtagCount}个标签，Instagram发帖使用20-30个标签可获最高触达`, `Only ${s.hashtagCount} hashtags. Instagram posts with 20-30 hashtags get highest reach.`), example: t('混合搭配：5个大词(100M+) + 10个中词(10K+) + 15个长尾词(<10K)', 'Mix: 5 big (#crypto 100M+) + 10 mid (#cryptolife 10K+) + 15 niche (<10K)'), actions: [t('增加至20-30个标签', 'Increase to 20-30 hashtags'), t('金字塔策略：大词 + 中词 + 长尾词', 'Pyramid strategy: big + medium + niche'), t('标签放在正文末尾，用换行隔开', 'Place after a line break at end of caption'), t('定期轮换标签组避免限流', 'Rotate hashtag sets to avoid shadowban')] });
     }
     if (!s.hasHook) {
-      opts.push({ priority: 'high', category: 'Caption Hook', direction: 'First 125 characters appear before "...more". Your hook must land here.', example: '"Stop paying international fees. Here\'s what I use instead 👇"', actions: ['Front-load the hook in first 125 chars', 'Use power words: Stop / Secret / Finally / Truth', 'Add emoji to break visual monotony'] });
+      opts.push({ priority: 'high', category: t('文案钩子', 'Caption Hook'), direction: t('前125个字符会显示在"...更多"之前，钩子必须在这里', 'First 125 chars appear before "...more". Your hook must land here.'), example: '"Stop paying international fees. Here\'s what I use instead 👇"', actions: [t('把钩子放在前125字符内', 'Front-load the hook in first 125 chars'), t('使用强力词：Stop / Secret / Finally / Truth', 'Use power words: Stop / Secret / Finally / Truth'), t('加入emoji打破视觉单调感', 'Add emoji to break visual monotony')] });
     }
   }
 
   if (platform === 'youtube') {
     if (title.length > 60) {
-      opts.push({ priority: 'high', category: 'Title Length', direction: `Title too long (${title.length} chars). YouTube truncates at ~60 chars on mobile.`, example: 'I Tested 7 Crypto Cards for 90 Days — Only 1 Won', actions: ['Shorten to under 60 characters', 'Front-load the most compelling words', 'Use numbers + power words + curiosity gap'] });
+      opts.push({ priority: 'high', category: t('标题长度', 'Title Length'), direction: t(`标题过长（${title.length}字符），YouTube在手机端约60字符处截断`, `Title too long (${title.length} chars). YouTube truncates at ~60 chars on mobile.`), example: 'I Tested 7 Crypto Cards for 90 Days — Only 1 Won', actions: [t('缩短至60字符以内', 'Shorten to under 60 characters'), t('把最吸引人的词放在前面', 'Front-load the most compelling words'), t('公式：数字 + 强力词 + 好奇心缺口', 'Formula: numbers + power words + curiosity gap')] });
     }
     if (!s.titleHasNumber && title) {
-      opts.push({ priority: 'medium', category: 'Title Numbers', direction: 'No numbers in title. Titles with numbers get 36% higher CTR.', example: '"7 Tools..." / "I Saved $500/Month..." / "90-Day Test..."', actions: ['Add a specific number to the title', 'Odd numbers perform slightly better than even', 'Dollar amounts and time periods are most compelling'] });
+      opts.push({ priority: 'medium', category: t('标题数字', 'Title Numbers'), direction: t('标题没有数字，含数字的标题点击率高36%', 'No numbers in title. Titles with numbers get 36% higher CTR.'), example: '"7 Tools..." / "I Saved $500/Month..." / "90-Day Test..."', actions: [t('在标题中加入具体数字', 'Add a specific number to the title'), t('奇数表现略优于偶数', 'Odd numbers slightly outperform even'), t('金额和时间段最有吸引力', 'Dollar amounts and time periods are most compelling')] });
     }
   }
 
   if (platform === 'facebook') {
     if (!s.hasQuestion) {
-      opts.push({ priority: 'high', category: 'Comments Driver', direction: 'No question in post. Questions are the #1 driver of Facebook comments.', example: '"Have you ever felt this way?" / "What would you do?" / "Am I the only one?"', actions: ['End with an open-ended question', 'Facebook algorithm heavily weights comment count', 'Avoid yes/no questions — open questions get 3x more replies'] });
+      opts.push({ priority: 'high', category: t('评论驱动', 'Comments Driver'), direction: t('帖子没有提问，提问是Facebook评论数的第一驱动力', 'No question in post. Questions are the #1 driver of Facebook comments.'), example: '"Have you ever felt this way?" / "What would you do?" / "Am I the only one?"', actions: [t('在结尾加一个开放式问题', 'End with an open-ended question'), t('Facebook算法重度依赖评论权重', 'Facebook algorithm heavily weights comment count'), t('避免是/否问题，开放性问题回复量多3倍', 'Open questions get 3x more replies than yes/no')] });
     }
   }
 
@@ -356,14 +365,14 @@ function generateOptimizations(platform: Platform, title: string, content: strin
 
 // --- Main Analyze Function ---
 
-export function analyzeContent(title: string, content: string, platform: Platform, twitterLang?: 'zh' | 'en'): ScoreResult {
+export function analyzeContent(title: string, content: string, platform: Platform, twitterLang?: 'zh' | 'en', uiLang: 'zh' | 'en' = 'en'): ScoreResult {
   const rules = PLATFORM_RULES[platform];
   const lang = platform === 'twitter'
     ? (twitterLang || detectLanguage(title + content))
     : (platform === 'xhs' ? 'zh' : 'en');
 
   const contentType = detectContentType(title, content);
-  const { violations, complianceScore } = checkViolations(title, content, platform, lang);
+  const { violations, complianceScore } = checkViolations(title, content, platform, lang, uiLang);
   const structure = analyzeStructure(title, content, platform, lang);
 
   const engagement = calcEngagement(platform, title, content, structure);
@@ -382,7 +391,7 @@ export function analyzeContent(title: string, content: string, platform: Platfor
   );
 
   const status: ScoreResult['status'] = overallScore >= 75 ? 'safe' : overallScore >= 50 ? 'warning' : 'danger';
-  const optimizations = generateOptimizations(platform, title, content, structure, violations, lang);
+  const optimizations = generateOptimizations(platform, title, content, structure, violations, lang, uiLang);
 
   let hashSuggestions: string[] = [];
   if (platform === 'xhs') {

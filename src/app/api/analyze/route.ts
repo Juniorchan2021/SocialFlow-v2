@@ -10,11 +10,12 @@ import type { Platform } from '@/lib/rules';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title = '', content, platforms, twitterLang } = body as {
+    const { title = '', content, platforms, twitterLang, uiLang = 'en' } = body as {
       title?: string;
       content: string;
       platforms: Platform[];
       twitterLang?: 'zh' | 'en';
+      uiLang?: 'zh' | 'en';
     };
 
     if (!content || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
@@ -29,9 +30,9 @@ export async function POST(req: NextRequest) {
       algoSim?: AlgoSimResult;
       viralPrediction?: ViralPrediction;
     })[] = platforms.map(p => {
-      const result = analyzeContent(title, content, p, twitterLang);
-      const algoSim = simulateAlgorithm(p, title, content, result.structure, result.language as 'zh' | 'en');
-      const viralPrediction = predictViral(p, title, content, result.structure, result.contentType, result.language as 'zh' | 'en');
+      const result = analyzeContent(title, content, p, twitterLang, uiLang);
+      const algoSim = simulateAlgorithm(p, title, content, result.structure, result.language as 'zh' | 'en', uiLang);
+      const viralPrediction = predictViral(p, title, content, result.structure, result.contentType, result.language as 'zh' | 'en', uiLang);
       return { ...result, algoSim, viralPrediction };
     });
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
           : 'none';
         item.aiAnalysis = await aiAnalyzeContent(
           title, content, item.platform, item.platformName,
-          item.language as 'zh' | 'en', violationSummary, item.contentType,
+          item.language as 'zh' | 'en', violationSummary, item.contentType, uiLang,
         );
       } catch { item.aiAnalysis = null; }
     }));

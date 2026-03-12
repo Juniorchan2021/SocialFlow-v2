@@ -13,8 +13,8 @@ interface TitleScore {
   rank: number;
 }
 
-function scoreTitleDimensions(title: string, content: string, platform: Platform, twitterLang?: 'zh' | 'en') {
-  const result = analyzeContent(title, content, platform, twitterLang);
+function scoreTitleDimensions(title: string, content: string, platform: Platform, twitterLang?: 'zh' | 'en', uiLang?: 'zh' | 'en') {
+  const result = analyzeContent(title, content, platform, twitterLang, uiLang);
   const lower = title.toLowerCase();
 
   let hookStrength = 0;
@@ -48,11 +48,12 @@ function scoreTitleDimensions(title: string, content: string, platform: Platform
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { titles, content, platform, twitterLang } = body as {
+    const { titles, content, platform, twitterLang, uiLang } = body as {
       titles: string[];
       content: string;
       platform: Platform;
       twitterLang?: 'zh' | 'en';
+      uiLang?: 'zh' | 'en';
     };
 
     if (!titles || titles.length < 2 || !content || !platform) {
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
     }
 
     const titleScores: TitleScore[] = titles.map(title => {
-      const dims = scoreTitleDimensions(title, content, platform, twitterLang);
+      const dims = scoreTitleDimensions(title, content, platform, twitterLang, uiLang);
       return { title, ...dims, rank: 0 };
     });
 
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     let aiTitleScore: TitleScore | null = null;
     if (aiTitle) {
-      const dims = scoreTitleDimensions(aiTitle, content, platform, twitterLang);
+      const dims = scoreTitleDimensions(aiTitle, content, platform, twitterLang, uiLang);
       aiTitleScore = { title: aiTitle, ...dims, rank: 0 };
     }
 

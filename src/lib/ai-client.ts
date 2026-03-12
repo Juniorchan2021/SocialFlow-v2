@@ -18,6 +18,7 @@ export async function aiAnalyzeContent(
   lang: 'zh' | 'en',
   violationSummary: string,
   contentType: string,
+  uiLang: 'zh' | 'en' = 'en',
 ): Promise<{
   contextualRisk: string;
   aiInsight: string;
@@ -28,24 +29,24 @@ export async function aiAnalyzeContent(
   const anthropic = getClient();
   if (!anthropic) return null;
 
-  const isZh = lang === 'zh';
+  const respondZh = uiLang === 'zh';
 
-  const prompt = isZh
+  const prompt = respondZh
     ? `你是一位专业的${platformName}内容运营专家，精通平台算法和合规规则。
 
-待检测内容：
+待检测内容（${lang === 'en' ? '英文内容' : '中文内容'}）：
 标题：${title || '（无标题）'}
 正文：${content}
 内容类型：${contentType}
 规则引擎已检出的违规词：${violationSummary}
 
-请进行AI深度分析，仅返回JSON：
+请用中文进行AI深度分析。改写后的标题和正文保持原内容语言（${lang === 'en' ? '英文' : '中文'}），但评价和建议用中文。仅返回JSON：
 {
   "contextualRisk": "low/medium/high",
-  "aiInsight": "对内容合规风险和增长潜力的1-2句专业评价",
-  "rewriteTitle": "优化后的标题（适合${platformName}搜索）",
-  "rewriteContent": "优化后的正文（修复违规、提升互动性、保留原意）",
-  "additionalTips": ["规则引擎未识别但重要的建议1", "建议2", "建议3"]
+  "aiInsight": "对内容合规风险和增长潜力的1-2句中文专业评价",
+  "rewriteTitle": "优化后的标题（保持${lang === 'en' ? '英文' : '中文'}，适合${platformName}搜索）",
+  "rewriteContent": "优化后的正文（保持${lang === 'en' ? '英文' : '中文'}，修复违规、提升互动性、保留原意）",
+  "additionalTips": ["中文建议1", "中文建议2", "中文建议3"]
 }`
     : `You are an expert ${platformName} content strategist specializing in compliance and engagement optimization.
 
@@ -88,6 +89,7 @@ export async function aiAnalyzeImage(
   contentType: string,
   title: string,
   lang: 'zh' | 'en',
+  uiLang: 'zh' | 'en' = 'en',
 ): Promise<{
   compliance: { overallRisk: string; issues: { type: string; severity: string; location: string; description: string; action: string }[]; safeToPublish: boolean };
   design: { designScore: number; scrollStopPower: number; feedback: string; topActions: string[]; styleReferences: { name: string; description: string }[] };
@@ -95,18 +97,18 @@ export async function aiAnalyzeImage(
   const anthropic = getClient();
   if (!anthropic) return null;
 
-  const isZh = lang === 'zh';
+  const respondZh = uiLang === 'zh';
 
-  const prompt = isZh
+  const prompt = respondZh
     ? `你同时是：1) 社媒合规审核专家 2) 顶级平面设计总监（曾服务Apple/Nike级品牌）
 
-请分析这张${platformName}配图，返回两部分分析。
+请用中文分析这张${platformName}配图，返回两部分分析。
 
 目标平台：${platformName}
 文案标题：${title || '无'}
 内容类型：${contentType}
 
-仅返回JSON：
+仅返回JSON（所有文本字段用中文）：
 {
   "compliance": {
     "overallRisk": "low/medium/high",
@@ -116,8 +118,8 @@ export async function aiAnalyzeImage(
   "design": {
     "designScore": 0-100,
     "scrollStopPower": 0-100,
-    "feedback": "2-3句专业设计评价",
-    "topActions": ["最重要的可执行设计建议1", "建议2", "建议3", "建议4"],
+    "feedback": "2-3句中文专业设计评价",
+    "topActions": ["中文可执行设计建议1", "建议2", "建议3", "建议4"],
     "styleReferences": [{"name": "参考风格名", "description": "为什么适合这个内容"}]
   }
 }`
@@ -174,31 +176,37 @@ export async function aiRewrite(
   platformName: string,
   lang: 'zh' | 'en',
   mode: 'compliance' | 'algorithm' | 'viral',
+  uiLang: 'zh' | 'en' = 'en',
 ): Promise<{ rewrittenTitle: string; rewrittenContent: string; changes: string[] } | null> {
   const anthropic = getClient();
   if (!anthropic) return null;
 
+  const respondZh = uiLang === 'zh';
+
   const modeInstructions = {
-    compliance: lang === 'zh'
+    compliance: respondZh
       ? '修复所有违规内容，替换为合规表述，保留原意和风格'
       : 'Fix all compliance violations, replace with compliant alternatives, preserve meaning and style',
-    algorithm: lang === 'zh'
+    algorithm: respondZh
       ? `针对${platformName}算法优化：加钩子词、优化标签、增加互动引导、调整结构`
       : `Optimize for ${platformName} algorithm: add hooks, optimize hashtags, add CTAs, improve structure`,
-    viral: lang === 'zh'
+    viral: respondZh
       ? `用爆文公式重写标题和开头，制造情绪张力和好奇心缺口，保留核心信息`
       : `Rewrite title and opening using viral formulas. Create emotional tension and curiosity gaps. Preserve core message.`,
   };
 
-  const prompt = lang === 'zh'
+  const contentLangNote = lang === 'en' ? (respondZh ? '英文' : 'English') : (respondZh ? '中文' : 'Chinese');
+
+  const prompt = respondZh
     ? `你是${platformName}顶级内容运营专家。
 任务：${modeInstructions[mode]}
 
 原标题：${title || '（无）'}
 原正文：${content}
 
+重要：改写后的标题和正文保持原内容语言（${contentLangNote}），但changes修改说明用中文。
 仅返回JSON：
-{"rewrittenTitle": "改写后标题", "rewrittenContent": "改写后正文", "changes": ["具体修改点1", "修改点2", "修改点3"]}`
+{"rewrittenTitle": "改写后标题（${contentLangNote}）", "rewrittenContent": "改写后正文（${contentLangNote}）", "changes": ["中文修改说明1", "中文修改说明2", "中文修改说明3"]}`
     : `You are a top-tier ${platformName} content strategist.
 Task: ${modeInstructions[mode]}
 

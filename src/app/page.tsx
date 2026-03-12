@@ -31,6 +31,7 @@ interface ImageFile {
 }
 
 export default function Home() {
+  const { lang: uiLang, t } = useLang();
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(['xhs']);
   const [twitterLang, setTwitterLang] = useState<'zh' | 'en'>('en');
   const [title, setTitle] = useState('');
@@ -96,7 +97,7 @@ export default function Home() {
     setAnalyzing(true); setResults(null); setRewriteResult(null); setSavedReportId(null); setShareUrl(null);
     let freshResults: any[] | null = null;
     try {
-      const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, platforms: selectedPlatforms, twitterLang }) });
+      const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, platforms: selectedPlatforms, twitterLang, uiLang }) });
       const json = await res.json();
       if (json.success) { freshResults = json.data; setResults(json.data); setActiveTab(json.data[0]?.platform || selectedPlatforms[0]); if (json.reportId) setSavedReportId(json.reportId); }
     } catch (err) { console.error('Analysis failed:', err); }
@@ -107,20 +108,20 @@ export default function Home() {
         try {
           const reader = new FileReader();
           const base64 = await new Promise<string>((resolve, reject) => { reader.onload = () => resolve((reader.result as string).split(',')[1]); reader.onerror = () => reject(reader.error); reader.readAsDataURL(img.file); });
-          const vr = await fetch('/api/vision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: base64, mediaType: img.file.type, platform: pp, platformName: PLATFORMS.find(p => p.id === pp)?.name, contentType: 'general', title, lang }) });
+          const vr = await fetch('/api/vision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: base64, mediaType: img.file.type, platform: pp, platformName: PLATFORMS.find(p => p.id === pp)?.name, contentType: 'general', title, lang, uiLang }) });
           const vj = await vr.json();
           if (vj.success) setImages(prev => { const c = [...prev]; if (c[i]) c[i] = { ...c[i], analysis: vj.data, analyzing: false }; return c; });
         } catch { setImages(prev => { const c = [...prev]; if (c[i]) c[i] = { ...c[i], analyzing: false }; return c; }); }
       }));
     }
     setAnalyzing(false);
-  }, [title, content, selectedPlatforms, twitterLang, images]);
+  }, [title, content, selectedPlatforms, twitterLang, uiLang, images]);
 
   const handleRewrite = async (mode: 'compliance' | 'algorithm' | 'viral') => {
     if (!results || !activeTab) return;
     const item = results.find((r: any) => r.platform === activeTab); if (!item) return;
     setRewriting(mode);
-    try { const res = await fetch('/api/rewrite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, platform: item.platform, platformName: item.platformName, lang: item.language, mode }) }); const json = await res.json(); if (json.success) setRewriteResult({ mode, ...json.data }); } catch (err) { console.error('Rewrite failed:', err); }
+    try { const res = await fetch('/api/rewrite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, platform: item.platform, platformName: item.platformName, lang: item.language, mode, uiLang }) }); const json = await res.json(); if (json.success) setRewriteResult({ mode, ...json.data }); } catch (err) { console.error('Rewrite failed:', err); }
     setRewriting(null);
   };
 
@@ -168,7 +169,6 @@ export default function Home() {
     setSharing(false);
   }, [results, savedReportId, selectedPlatforms, title, content, twitterLang, images, resizeToThumbnail]);
 
-  const { lang: uiLang, t } = useLang();
   const activeResult = results?.find((r: any) => r.platform === activeTab);
   const isZh = uiLang === 'zh';
 

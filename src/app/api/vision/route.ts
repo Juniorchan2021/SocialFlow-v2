@@ -4,7 +4,7 @@ import { aiAnalyzeImage } from '@/lib/ai-client';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageBase64, mediaType, platform, platformName, contentType, title, lang } = body;
+    const { imageBase64, mediaType, platform, platformName, contentType, title, lang, uiLang } = body;
 
     if (!imageBase64 || !platform) {
       return NextResponse.json({ error: '缺少图片数据或平台参数' }, { status: 400 });
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       contentType || 'general',
       title || '',
       lang || 'en',
+      uiLang || 'en',
     );
 
     if (!result) {

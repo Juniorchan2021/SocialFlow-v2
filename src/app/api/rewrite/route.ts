@@ -4,7 +4,7 @@ import { aiRewrite } from '@/lib/ai-client';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, content, platform, platformName, lang, mode } = body;
+    const { title, content, platform, platformName, lang, mode, uiLang } = body;
 
     if (!content || !platform || !mode) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       platformName || platform,
       lang || 'en',
       mode,
+      uiLang || 'en',
     );
 
     if (!result) {
