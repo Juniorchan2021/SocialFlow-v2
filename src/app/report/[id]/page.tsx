@@ -49,5 +49,5 @@ export default async function ReportPage({ params }: Props) {
     );
   }
 
-  return <ReportClient report={{ ...report, results: report.results as any[] }} />;
+  return <ReportClient report={{ ...report, results: report.results as any[], images: report.images || [] }} />;
 }

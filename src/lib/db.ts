@@ -20,6 +20,7 @@ function getDb(): Database.Database {
       content    TEXT NOT NULL,
       twitter_lang TEXT,
       results    TEXT NOT NULL,
+      images     TEXT DEFAULT '[]',
       created_at TEXT DEFAULT (datetime('now')),
       share_count INTEGER DEFAULT 0
     );
@@ -34,6 +35,7 @@ function getDb(): Database.Database {
       created_at     TEXT DEFAULT (datetime('now'))
     );
   `);
+  try { _db.exec(`ALTER TABLE reports ADD COLUMN images TEXT DEFAULT '[]'`); } catch { /* column already exists */ }
   return _db;
 }
 
@@ -46,16 +48,17 @@ export function saveReport(data: {
   content: string;
   twitterLang?: string;
   results: unknown;
+  images?: string[];
 }): void {
   const db = getDb();
   db.prepare(`
-    INSERT INTO reports (id, platforms, title, content, twitter_lang, results)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO reports (id, platforms, title, content, twitter_lang, results, images)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       platforms = excluded.platforms, title = excluded.title,
       content = excluded.content, twitter_lang = excluded.twitter_lang,
-      results = excluded.results
-  `).run(data.id, JSON.stringify(data.platforms), data.title, data.content, data.twitterLang || null, JSON.stringify(data.results));
+      results = excluded.results, images = excluded.images
+  `).run(data.id, JSON.stringify(data.platforms), data.title, data.content, data.twitterLang || null, JSON.stringify(data.results), JSON.stringify(data.images || []));
 }
 
 export function getReport(id: string): {
@@ -65,12 +68,15 @@ export function getReport(id: string): {
   content: string;
   twitterLang: string | null;
   results: unknown;
+  images: string[];
   createdAt: string;
   shareCount: number;
 } | null {
   const db = getDb();
   const row = db.prepare('SELECT * FROM reports WHERE id = ?').get(id) as Record<string, unknown> | undefined;
   if (!row) return null;
+  let images: string[] = [];
+  try { images = JSON.parse((row.images as string) || '[]'); } catch { images = []; }
   return {
     id: row.id as string,
     platforms: JSON.parse(row.platforms as string),
@@ -78,6 +84,7 @@ export function getReport(id: string): {
     content: row.content as string,
     twitterLang: row.twitter_lang as string | null,
     results: JSON.parse(row.results as string),
+    images,
     createdAt: row.created_at as string,
     shareCount: row.share_count as number,
   };

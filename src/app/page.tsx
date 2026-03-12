@@ -130,11 +130,38 @@ export default function Home() {
     setAbLoading(false);
   }, [title, altTitles, content, selectedPlatforms, twitterLang]);
 
+  const resizeToThumbnail = useCallback((file: File, maxW = 200): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const scale = Math.min(maxW / img.width, 1);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(''); };
+      img.src = url;
+    });
+  }, []);
+
   const handleShareReport = useCallback(async () => {
     if (!results) return; setSharing(true);
-    try { const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ platforms: selectedPlatforms, title, content, twitterLang, results }) }); const json = await res.json(); if (json.success) { setShareUrl(json.reportUrl); try { await navigator.clipboard.writeText(json.reportUrl); } catch {} } } catch {}
+    try {
+      const imageThumbnails = await Promise.all(images.map(img => resizeToThumbnail(img.file)));
+      const validThumbnails = imageThumbnails.filter(Boolean);
+      const res = await fetch('/api/report', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platforms: selectedPlatforms, title, content, twitterLang, results, imageThumbnails: validThumbnails }),
+      });
+      const json = await res.json();
+      if (json.success) { setShareUrl(json.reportUrl); try { await navigator.clipboard.writeText(json.reportUrl); } catch {} }
+    } catch {}
     setSharing(false);
-  }, [results, selectedPlatforms, title, content, twitterLang]);
+  }, [results, selectedPlatforms, title, content, twitterLang, images, resizeToThumbnail]);
 
   const { lang: uiLang, t } = useLang();
   const activeResult = results?.find((r: any) => r.platform === activeTab);
