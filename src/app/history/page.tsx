@@ -2,24 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { cn, scoreColor } from '@/lib/utils';
+import { ArrowLeft } from 'lucide-react';
 
-interface HistoryItem {
-  id: number;
-  reportId: string | null;
-  platforms: string[];
-  title: string;
-  contentPreview: string;
-  overallScore: number;
-  status: string;
-  createdAt: string;
-}
+interface HistoryItem { id: number; reportId: string | null; platforms: string[]; title: string; contentPreview: string; overallScore: number; status: string; createdAt: string; }
 
-const PLATFORM_ICONS: Record<string, string> = { xhs: '📕', twitter: '🐦', facebook: '📘', instagram: '📸', youtube: '▶️' };
-const STATUS_STYLE: Record<string, string> = {
-  safe: 'bg-green-500/10 text-green-400',
-  warning: 'bg-amber-500/10 text-amber-400',
-  danger: 'bg-red-500/10 text-red-400',
-};
+const ICONS: Record<string, string> = { xhs: '📕', twitter: '𝕏', facebook: 'f', instagram: '📸', youtube: '▶' };
+const STATUS: Record<string, string> = { safe: 'grade-s', warning: 'grade-b', danger: 'grade-c' };
 
 export default function HistoryPage() {
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -27,59 +15,35 @@ export default function HistoryPage() {
   const [total, setTotal] = useState(0);
 
   useEffect(() => {
-    fetch('/api/history?limit=50')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) { setItems(json.data); setTotal(json.total); }
-      })
-      .finally(() => setLoading(false));
+    fetch('/api/history?limit=50').then(r => r.json()).then(j => { if (j.success) { setItems(j.data); setTotal(j.total); } }).finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-slate-100">
-      <header className="text-center pt-12 pb-8 px-4">
-        <div className="text-xs font-bold tracking-[0.15em] uppercase text-indigo-400 mb-2">SocialFlow</div>
-        <h1 className="text-3xl font-bold">检测历史</h1>
-        <p className="text-slate-500 text-sm mt-2">共 {total} 条检测记录</p>
+    <div className="min-h-screen">
+      <header className="text-center pt-28 pb-8 px-4">
+        <h1 className="text-3xl font-extrabold tracking-tight text-white">History</h1>
+        <p className="text-zinc-600 text-sm mt-2">{total} records</p>
       </header>
-
       <main className="max-w-3xl mx-auto px-4 pb-20">
-        <a href="/" className="inline-flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 mb-6 transition">
-          ← 返回检测工具
-        </a>
-
-        {loading ? (
-          <div className="text-center py-20 text-slate-500">加载中...</div>
-        ) : items.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-slate-500 mb-4">暂无检测记录</p>
-            <a href="/" className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition">
-              开始第一次检测
-            </a>
-          </div>
+        <a href="/" className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 mb-6 transition"><ArrowLeft size={12} /> Back</a>
+        {loading ? <div className="text-center py-20 text-zinc-600">Loading...</div> : items.length === 0 ? (
+          <div className="text-center py-20"><p className="text-zinc-600 mb-4">No records yet</p><a href="/" className="btn-primary inline-block px-6 py-2 text-sm">Start first check</a></div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {items.map(item => (
-              <div key={item.id}
-                className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition flex items-center gap-4">
-                <div className="text-3xl font-bold w-14 text-center" style={{ color: scoreColor(item.overallScore) }}>
-                  {item.overallScore}
-                </div>
+              <div key={item.id} className="glass-elevated flex items-center gap-4 p-4">
+                <div className="text-2xl font-extrabold w-12 text-center tabular-nums tracking-tight" style={{ color: scoreColor(item.overallScore) }}>{item.overallScore}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="flex gap-1">{item.platforms.map(p => <span key={p} className="text-sm">{PLATFORM_ICONS[p] || p}</span>)}</div>
-                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', STATUS_STYLE[item.status] || '')}>
-                      {item.status === 'safe' ? '合规' : item.status === 'warning' ? '需优化' : '风险'}
+                    <div className="flex gap-1">{item.platforms.map(p => <span key={p} className="text-xs">{ICONS[p] || p}</span>)}</div>
+                    <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-md', STATUS[item.status] || '')}>
+                      {item.status === 'safe' ? 'OK' : item.status === 'warning' ? 'WARN' : 'RISK'}
                     </span>
                   </div>
-                  <div className="text-sm text-slate-200 truncate">{item.title || item.contentPreview}</div>
-                  <div className="text-[11px] text-slate-500 mt-1">{new Date(item.createdAt).toLocaleString('zh-CN')}</div>
+                  <div className="text-sm text-zinc-300 truncate">{item.title || item.contentPreview}</div>
+                  <div className="text-[10px] text-zinc-600 mt-0.5 font-mono">{new Date(item.createdAt).toLocaleString('zh-CN')}</div>
                 </div>
-                {item.reportId && (
-                  <a href={`/report/${item.reportId}`} className="text-xs text-indigo-400 hover:text-indigo-300 shrink-0">
-                    查看报告 →
-                  </a>
-                )}
+                {item.reportId && <a href={`/report/${item.reportId}`} className="text-[10px] text-violet-400 hover:text-violet-300 shrink-0">View →</a>}
               </div>
             ))}
           </div>
