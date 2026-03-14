@@ -10,6 +10,197 @@ function getClient(): Anthropic | null {
   return client;
 }
 
+/**
+ * 安全的 JSON 解析函数
+ * 带错误处理和降级机制
+ */
+function safeJsonParse<T>(
+  text: string,
+  fallback: T,
+  maxRetries = 1
+): { data: T | null; success: boolean; error?: string } {
+  // 清理文本
+  let cleaned = text
+    .replace(/```json\n?|\n?```/g, '')
+    .trim();
+  
+  // 移除可能的 BOM
+  cleaned = cleaned.replace(/^\uFEFF/, '');
+  
+  try {
+    const data = JSON.parse(cleaned) as T;
+    return { data, success: true };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : 'Unknown parse error';
+    
+    // 尝试修复常见的 JSON 问题
+    if (maxRetries > 0) {
+      // 尝试修复尾部逗号
+      let fixed = cleaned.replace(/,\s*([}\]])/g, '$1');
+      // 尝试修复未转义的引号
+      fixed = fixed.replace(/(?<!\\)"/g, '\\"').replace(/\\"/g, '"');
+      // 尝试提取 JSON 对象
+      const jsonMatch = fixed.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = safeJsonParse(jsonMatch[0], fallback, maxRetries - 1);
+        if (result.success) {
+          return result;
+        }
+      }
+    }
+    
+    console.error('JSON parse failed:', error, 'Text:', cleaned.slice(0, 500));
+    return { data: null, success: false, error };
+  }
+}
+
+/**
+ * 创建降级响应
+ */
+function createFallbackResponse(
+  platformName: string,
+  uiLang: 'zh' | 'en'
+): {
+  contextualRisk: string;
+  aiInsight: string;
+  rewriteTitle: string;
+  rewriteContent: string;
+  additionalTips: string[];
+} {
+  if (uiLang === 'zh') {
+    return {
+      contextualRisk: 'medium',
+      aiInsight: `AI 分析服务暂时不可用。请检查${platformName}社区规范，确保内容合规。`,
+      rewriteTitle: '（AI 分析失败，请手动检查）',
+      rewriteContent: '（AI 分析失败，请手动检查）',
+      additionalTips: [
+        '请确保内容符合平台社区规范',
+        '避免使用敏感词汇和不当内容',
+        '建议人工审核后再发布',
+      ],
+    };
+  }
+  
+  return {
+    contextualRisk: 'medium',
+    aiInsight: `AI analysis service is temporarily unavailable. Please review ${platformName} community guidelines to ensure compliance.`,
+    rewriteTitle: '(AI analysis failed, please check manually)',
+    rewriteContent: '(AI analysis failed, please check manually)',
+    additionalTips: [
+      'Ensure content complies with platform guidelines',
+      'Avoid sensitive words and inappropriate content',
+      'Recommend manual review before publishing',
+    ],
+  };
+}
+
+/**
+ * 创建图片分析降级响应
+ */
+function createImageFallbackResponse(
+  uiLang: 'zh' | 'en'
+): {
+  compliance: {
+    overallRisk: string;
+    issues: { type: string; severity: string; location: string; description: string; action: string }[];
+    safeToPublish: boolean;
+  };
+  design: {
+    designScore: number;
+    scrollStopPower: number;
+    feedback: string;
+    topActions: string[];
+    styleReferences: { name: string; description: string }[];
+  };
+} {
+  if (uiLang === 'zh') {
+    return {
+      compliance: {
+        overallRisk: 'medium',
+        issues: [{
+          type: 'analysis_failed',
+          severity: 'medium',
+          location: '全局',
+          description: 'AI 图片分析服务暂时不可用',
+          action: '请人工审核图片内容',
+        }],
+        safeToPublish: false,
+      },
+      design: {
+        designScore: 0,
+        scrollStopPower: 0,
+        feedback: 'AI 分析服务暂时不可用，请人工审核图片质量。',
+        topActions: [
+          '确保图片清晰，主体突出',
+          '检查是否有不当内容',
+          '建议参考平台热门内容风格',
+        ],
+        styleReferences: [],
+      },
+    };
+  }
+  
+  return {
+    compliance: {
+      overallRisk: 'medium',
+      issues: [{
+        type: 'analysis_failed',
+        severity: 'medium',
+        location: 'global',
+        description: 'AI image analysis service is temporarily unavailable',
+        action: 'Please manually review image content',
+      }],
+      safeToPublish: false,
+    },
+    design: {
+      designScore: 0,
+      scrollStopPower: 0,
+      feedback: 'AI analysis service is temporarily unavailable. Please manually review image quality.',
+      topActions: [
+        'Ensure image is clear with prominent subject',
+        'Check for inappropriate content',
+        'Consider referencing popular content styles',
+      ],
+      styleReferences: [],
+    },
+  };
+}
+
+/**
+ * 创建改写降级响应
+ */
+function createRewriteFallbackResponse(
+  title: string,
+  content: string,
+  uiLang: 'zh' | 'en'
+): {
+  rewrittenTitle: string;
+  rewrittenContent: string;
+  changes: string[];
+} {
+  if (uiLang === 'zh') {
+    return {
+      rewrittenTitle: title || '（AI 改写失败）',
+      rewrittenContent: content,
+      changes: [
+        'AI 改写服务暂时不可用',
+        '请手动检查并优化内容',
+        '建议参考平台热门内容风格',
+      ],
+    };
+  }
+  
+  return {
+    rewrittenTitle: title || '(AI rewrite failed)',
+    rewrittenContent: content,
+    changes: [
+      'AI rewrite service is temporarily unavailable',
+      'Please manually review and optimize content',
+      'Consider referencing popular content styles',
+    ],
+  };
+}
+
 export async function aiAnalyzeContent(
   title: string,
   content: string,
@@ -71,13 +262,21 @@ Return ONLY valid JSON:
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }],
     });
-    const text = (message.content[0] as { type: string; text: string }).text
-      .replace(/```json\n?|\n?```/g, '')
-      .trim();
-    return JSON.parse(text);
+    
+    const text = (message.content[0] as { type: string; text: string }).text;
+    const fallback = createFallbackResponse(platformName, uiLang);
+    const result = safeJsonParse(text, fallback);
+    
+    if (!result.success || !result.data) {
+      console.error(`AI analysis JSON parse failed [${platform}]`);
+      return fallback;
+    }
+    
+    return result.data;
   } catch (err) {
     console.error(`AI analysis failed [${platform}]:`, err);
-    return null;
+    // 返回降级响应而不是 null
+    return createFallbackResponse(platformName, uiLang);
   }
 }
 
@@ -159,13 +358,21 @@ Return ONLY valid JSON:
         ],
       }],
     });
-    const text = (message.content[0] as { type: string; text: string }).text
-      .replace(/```json\n?|\n?```/g, '')
-      .trim();
-    return JSON.parse(text);
+    
+    const text = (message.content[0] as { type: string; text: string }).text;
+    const fallback = createImageFallbackResponse(uiLang);
+    const result = safeJsonParse(text, fallback);
+    
+    if (!result.success || !result.data) {
+      console.error(`Image analysis JSON parse failed [${platform}]`);
+      return fallback;
+    }
+    
+    return result.data;
   } catch (err) {
     console.error(`Image analysis failed [${platform}]:`, err);
-    return null;
+    // 返回降级响应而不是 null
+    return createImageFallbackResponse(uiLang);
   }
 }
 
@@ -222,12 +429,20 @@ Return ONLY valid JSON:
       max_tokens: 3000,
       messages: [{ role: 'user', content: prompt }],
     });
-    const text = (message.content[0] as { type: string; text: string }).text
-      .replace(/```json\n?|\n?```/g, '')
-      .trim();
-    return JSON.parse(text);
+    
+    const text = (message.content[0] as { type: string; text: string }).text;
+    const fallback = createRewriteFallbackResponse(title, content, uiLang);
+    const result = safeJsonParse(text, fallback);
+    
+    if (!result.success || !result.data) {
+      console.error(`Rewrite JSON parse failed [${platform}]`);
+      return fallback;
+    }
+    
+    return result.data;
   } catch (err) {
     console.error(`Rewrite failed [${platform}]:`, err);
-    return null;
+    // 返回降级响应而不是 null
+    return createRewriteFallbackResponse(title, content, uiLang);
   }
 }
