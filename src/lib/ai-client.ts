@@ -1,4 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { getCache, setCache, generateCacheKey } from './cache';
+import { logger } from './logger';
 
 let client: Anthropic | null = null;
 
